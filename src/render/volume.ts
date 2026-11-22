@@ -60,6 +60,16 @@ float waterAt(vec3 p) {
   return s.r + s.g;
 }
 
+// Cheap per-pixel hash, used to offset where each ray starts sampling.
+// Without it the fixed sample spacing paints visible rings and dots wherever
+// the cloud is small compared with the box; with it the error becomes noise,
+// which the eye forgives.
+float hash12(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
+
 // Slab intersection with the unit box centred on the origin.
 bool boxHit(vec3 ro, vec3 rd, out float t0, out float t1) {
   vec3 inv = 1.0 / rd;
@@ -104,6 +114,8 @@ void main() {
   float steps = float(uSteps);
   float dt = span / steps;
 
+  float jitter = hash12(gl_FragCoord.xy);
+
   if (uMode == 0) {
     // --- volumetric absorption + single scattering ---
     vec3 acc = vec3(0.0);
@@ -111,7 +123,7 @@ void main() {
     float sunStep = 1.6 / 6.0;
     for (int i = 0; i < 512; i++) {
       if (i >= uSteps || trans < 0.004) break;
-      float t = t0 + (float(i) + 0.5) * dt;
+      float t = t0 + (float(i) + jitter) * dt;
       vec3 p = ro + rd * t;
       vec4 s = sampleField(p);
       float q = (uFieldSel == 0) ? s.r : (uFieldSel == 1) ? s.g
@@ -147,7 +159,7 @@ void main() {
   float prev = 0.0;
   for (int i = 0; i < 512; i++) {
     if (i >= uSteps) break;
-    float t = t0 + (float(i) + 0.5) * dt;
+    float t = t0 + (float(i) + jitter) * dt;
     vec3 p = ro + rd * t;
     float q = waterAt(p);
     if (q >= uThreshold) {

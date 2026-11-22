@@ -200,11 +200,19 @@ textarea {
 .btnrow { display: flex; gap: 6px; padding: 6px 9px; }
 .btnrow button { flex: 1; }
 
+/* Desktop layout forced onto a narrow screen: stack the columns and scroll. */
 @media (max-width: 1100px) {
-  html, body { overflow: auto; }
-  main { grid-template-columns: 1fr; height: auto; }
-  .view { height: 70vh; }
-  .side { max-height: none; border: none; border-top: 1px solid var(--line); }
+  body[data-device="desktop"] { overflow: auto; }
+  body[data-device="desktop"] main {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+  body[data-device="desktop"] .view { height: 70vh; }
+  body[data-device="desktop"] .side {
+    max-height: none;
+    border: none;
+    border-top: 1px solid var(--line);
+  }
 }
 
 /* ---------------------------------------------------------------------------

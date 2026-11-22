@@ -2,6 +2,7 @@
 import { Solver, type Diagnostics } from "../core/solver";
 import { parcelAscent, bulkShear, srh, dewpoint } from "../core/thermo";
 import { baseStateToLevels, toInputSounding } from "../core/sounding";
+import { toHalf } from "../core/half";
 import type { Config, SoundingLevel } from "../core/config";
 
 /** Base-state summary shipped to the UI for the sounding diagram. */
@@ -107,14 +108,17 @@ function describeBase(): void {
   post({ type: "base", base: msg });
 }
 
-/** Pack the frame the renderer needs: cloud [g/kg], rain [g/kg], w [m/s]. */
+/**
+ * Pack the frame the renderer needs: cloud [g/kg], rain [g/kg], w [m/s], as
+ * half floats so the GPU will filter the volume smoothly.
+ */
 function packFrame(): { buf: ArrayBuffer; wMax: number } {
   const s = solver!;
   const { nx, ny, nz } = s;
   const n = nx * ny * nz;
   let buf = spare.pop();
-  if (!buf || buf.byteLength !== n * 4 * 4) buf = new ArrayBuffer(n * 4 * 4);
-  const out = new Float32Array(buf);
+  if (!buf || buf.byteLength !== n * 4 * 2) buf = new ArrayBuffer(n * 4 * 2);
+  const out = new Uint16Array(buf);
   let wMax = 1;
   for (let k = 0; k < nz; k++) {
     for (let j = 0; j < ny; j++) {
@@ -126,9 +130,9 @@ function packFrame(): { buf: ArrayBuffer; wMax: number } {
         const aw = Math.abs(w);
         if (aw > wMax) wMax = aw;
         const o = m * 4;
-        out[o] = s.qc[m] * 1e3;
-        out[o + 1] = s.qr[m] * 1e3;
-        out[o + 2] = w;
+        out[o] = toHalf(s.qc[m] * 1e3);
+        out[o + 1] = toHalf(s.qr[m] * 1e3);
+        out[o + 2] = toHalf(w);
         out[o + 3] = 0;
       }
     }

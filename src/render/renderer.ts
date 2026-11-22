@@ -170,10 +170,10 @@ export class SceneView {
 
     if (changed) {
       this.texture?.dispose();
-      const data = new Float32Array(nx * ny * nz * 4);
+      const data = new Uint16Array(nx * ny * nz * 4);
       const tex = new THREE.Data3DTexture(data, nx, ny, nz);
       tex.format = THREE.RGBAFormat;
-      tex.type = THREE.FloatType;
+      tex.type = THREE.HalfFloatType;
       tex.minFilter = THREE.LinearFilter;
       tex.magFilter = THREE.LinearFilter;
       tex.wrapS = THREE.ClampToEdgeWrapping;
@@ -200,10 +200,13 @@ export class SceneView {
     this.controls.update();
   }
 
-  /** Upload a frame: interleaved RGBA = cloud [g/kg], rain [g/kg], w [m/s]. */
-  updateField(data: Float32Array, wMax: number): void {
+  /**
+   * Upload a frame: interleaved RGBA half floats = cloud [g/kg], rain [g/kg],
+   * w [m/s].
+   */
+  updateField(data: Uint16Array, wMax: number): void {
     if (!this.texture) return;
-    const img = this.texture.image.data as unknown as Float32Array;
+    const img = this.texture.image.data as unknown as Uint16Array;
     if (img.length !== data.length) return;
     img.set(data);
     this.texture.needsUpdate = true;

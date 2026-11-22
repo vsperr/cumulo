@@ -138,7 +138,7 @@ worker.onmessage = (ev: MessageEvent<FromWorker>) => {
   } else if (m.type === "frame") {
     diag = m.diag;
     msPerStep = m.msPerStep;
-    const data = new Float32Array(m.buf);
+    const data = new Uint16Array(m.buf);
     view.updateField(data, Math.max(Math.abs(m.diag.maxW), Math.abs(m.diag.minW)));
     send({ type: "recycle", buf: m.buf }, [m.buf]);
     updateHud();
@@ -297,12 +297,13 @@ $("toideal").addEventListener("click", () => {
 const deviceSel = $<HTMLSelectElement>("device");
 let activeDevice: "desktop" | "mobile" | null = null;
 
+/**
+ * The compact layout kicks in wherever the three-column one will not fit.
+ * The threshold matches the stylesheet's, so there is no width at which the
+ * page is neither one layout nor the other.
+ */
 function detectMobile(): boolean {
-  const narrow = window.matchMedia("(max-width: 820px)").matches;
-  const coarseAndSmall =
-    window.matchMedia("(pointer: coarse)").matches &&
-    window.matchMedia("(max-width: 1100px)").matches;
-  return narrow || coarseAndSmall;
+  return window.matchMedia("(max-width: 1100px)").matches;
 }
 
 function effectiveDevice(): "desktop" | "mobile" {
