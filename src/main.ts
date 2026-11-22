@@ -14,6 +14,7 @@ import {
   soundingAt,
   formatTime,
   nearestHour,
+  RateLimited,
   type RemoteColumn,
 } from "./core/remoteSounding";
 import SimWorker from "./worker/sim.worker?worker";
@@ -185,10 +186,18 @@ function syncPointInputs(): void {
   lonInput.value = point.lon.toFixed(2);
 }
 
+let loadTimer = 0;
+/** Clicking around the map should not fire a request per click. */
+function scheduleLoad(delay = 350): void {
+  clearTimeout(loadTimer);
+  loadTimer = window.setTimeout(() => void loadColumn(), delay);
+}
+
 const map = new WorldMap($<HTMLCanvasElement>("map"), (p) => {
   point = p;
   syncPointInputs();
-  void loadColumn();
+  setStatus("Picked. Fetching…", "busy");
+  scheduleLoad();
 });
 syncPointInputs();
 map.setPoint(point, true);
@@ -201,11 +210,11 @@ for (const el of [latInput, lonInput]) {
     point = { lat: Math.max(-89, Math.min(89, lat)), lon };
     syncPointInputs();
     map.setPoint(point, true);
-    void loadColumn();
+    scheduleLoad();
   });
 }
-modelSel.addEventListener("change", () => void loadColumn());
-$("fetch").addEventListener("click", () => void loadColumn());
+modelSel.addEventListener("change", () => scheduleLoad(0));
+$("fetch").addEventListener("click", () => scheduleLoad(0));
 
 hourInput.addEventListener("input", () => {
   if (!column) return;
@@ -220,17 +229,22 @@ async function loadColumn(): Promise<void> {
   const name = MODELS.find((m) => m.id === modelSel.value)?.name ?? modelSel.value;
   setStatus(`Fetching ${name} at ${point.lat.toFixed(2)}, ${point.lon.toFixed(2)}…`, "busy");
   try {
-    const col = await fetchColumn(point.lat, point.lon, modelSel.value, 2, ctl.signal);
+    const col = await fetchColumn(point.lat, point.lon, modelSel.value, 1, ctl.signal);
     column = col;
     hourInput.max = String(col.times.length - 1);
     const h = nearestHour(col.times);
     hourInput.value = String(h);
     applySounding(h);
   } catch (e) {
-    if ((e as Error).name === "AbortError") return;
+    const err = e as Error;
+    if (err.name === "AbortError") return;
     column = null;
+    if (err instanceof RateLimited || err.name === "RateLimited") {
+      setStatus(`Hold on — ${err.message}.`, "bad");
+      return;
+    }
     setStatus(
-      `Could not load a sounding: ${(e as Error).message}. Some models only cover their own region.`,
+      `Could not load a sounding: ${err.message}. The regional models (ICON-D2, ICON-EU, ARPEGE) only cover their own area — try ICON global or GFS.`,
       "bad"
     );
   }

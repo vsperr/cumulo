@@ -52,9 +52,14 @@ can set CAPE by hand and then go look at what it did to the profile.
 
 There is a world map in the right-hand column. Click a point, pick a forecast
 model, and the real atmosphere above that point becomes the model's initial
-condition. The hour slider scrubs through two days of forecast without
+condition. The hour slider scrubs through a day of forecast without
 refetching, so you can watch an air mass destabilise through the afternoon and
 start a run from any moment.
+
+Requests are kept deliberately small — seventeen pressure levels up to 70 hPa,
+one day of hours — because a sounding request costs the free API about as much
+as two ordinary calls. Picks are debounced, columns are cached for ten minutes,
+and a rate-limit response backs off and retries rather than failing outright.
 
 Ten models are offered through the [Open-Meteo](https://open-meteo.com) API —
 no key, no account, nothing to install:

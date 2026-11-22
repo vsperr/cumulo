@@ -28,10 +28,14 @@ export const MODELS: RemoteModel[] = [
   { id: "jma_seamless", name: "JMA (Japan)", note: "Japan Meteorological Agency" },
 ];
 
-/** Pressure levels Open-Meteo serves, hPa. */
+/**
+ * Pressure levels requested, hPa. Open-Meteo also serves 50 and 30 hPa, but
+ * those sit above 20 km — far beyond any domain this model runs — and every
+ * extra variable counts against the free API's quota, so they are left out.
+ */
 const LEVELS = [
   1000, 975, 950, 925, 900, 850, 800, 700, 600, 500, 400, 300, 250, 200, 150,
-  100, 70, 50, 30,
+  100, 70,
 ];
 const PER_LEVEL = [
   "temperature",
@@ -97,31 +101,70 @@ function buildUrl(lat: number, lon: number, model: string, days: number): string
   return `https://api.open-meteo.com/v1/forecast?${q.toString()}`;
 }
 
+/** Thrown when the free API asks us to slow down, so the UI can say so. */
+export class RateLimited extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RateLimited";
+  }
+}
+
 /**
- * Download the forecast column for one point. The whole time range comes down
- * in a single request so the hour can be scrubbed without hitting the network
- * again.
+ * Columns already downloaded, keyed by point and model. Open-Meteo's free tier
+ * is generous but counts every variable of every hour, and one request here is
+ * worth several ordinary ones, so re-picking a point must not hit the network.
+ */
+const cache = new Map<string, { at: number; col: RemoteColumn }>();
+const CACHE_TTL = 10 * 60 * 1000;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Download the forecast column for one point. A day of hours comes down in a
+ * single request so the hour can be scrubbed without going back to the
+ * network, the result is cached, and a rate-limit response is retried with a
+ * short backoff before giving up.
  */
 export async function fetchColumn(
   lat: number,
   lon: number,
   model: string,
-  days = 2,
+  days = 1,
   signal?: AbortSignal
 ): Promise<RemoteColumn> {
-  const res = await fetch(buildUrl(lat, lon, model, days), { signal });
-  const body = (await res.json()) as {
+  const key = `${model}|${lat.toFixed(2)}|${lon.toFixed(2)}|${days}`;
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < CACHE_TTL) return hit.col;
+
+  const url = buildUrl(lat, lon, model, days);
+  let body: {
     error?: boolean;
     reason?: string;
     latitude: number;
     longitude: number;
     elevation: number;
     hourly: Hourly;
-  };
-  if (!res.ok || body.error)
-    throw new Error(body.reason ?? `request failed (${res.status})`);
+  } | null = null;
+
+  const backoff = [0, 1500, 4000];
+  for (let attempt = 0; attempt < backoff.length; attempt++) {
+    if (backoff[attempt] > 0) await sleep(backoff[attempt]);
+    const res = await fetch(url, { signal });
+    if (res.status === 429) {
+      if (attempt === backoff.length - 1)
+        throw new RateLimited(
+          "the free weather API is rate-limiting us — wait a few seconds and try again"
+        );
+      continue;
+    }
+    body = await res.json();
+    if (!res.ok || body?.error)
+      throw new Error(body?.reason ?? `request failed (${res.status})`);
+    break;
+  }
+  if (!body) throw new Error("no response");
   if (!body.hourly?.time?.length) throw new Error("no data for this point");
-  return {
+  const col: RemoteColumn = {
     model,
     modelName: MODELS.find((m) => m.id === model)?.name ?? model,
     lat: body.latitude,
@@ -130,6 +173,8 @@ export async function fetchColumn(
     times: body.hourly.time,
     hourly: body.hourly,
   };
+  cache.set(key, { at: Date.now(), col });
+  return col;
 }
 
 /** Potential temperature from Celsius and hPa. */
