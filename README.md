@@ -7,9 +7,7 @@ warm-rain microphysics — the same class of model as [CM1][cm1] — and draws t
 result as an untextured 3D volume. You set the sounding by hand, press Run, and
 watch what the atmosphere does with it.
 
-**[Open the model →](https://example.github.io/cumulo/)**
-
-<!-- Replace the link above with your Pages URL once the repository is published. -->
+**[Open the model → vsperr.github.io/cumulo](https://vsperr.github.io/cumulo/)**
 
 ## Why
 
