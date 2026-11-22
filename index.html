@@ -55,6 +55,41 @@
       </section>
 
       <aside class="side right">
+        <details class="group" id="realbox" open>
+          <summary>Real atmosphere</summary>
+          <canvas id="map"></canvas>
+          <div class="row">
+            <label for="lat">latitude</label>
+            <div class="numwrap">
+              <input class="num wide" id="lat" type="number" step="0.01" min="-89" max="89" />
+            </div>
+          </div>
+          <div class="row">
+            <label for="lon">longitude</label>
+            <div class="numwrap">
+              <input class="num wide" id="lon" type="number" step="0.01" min="-180" max="180" />
+            </div>
+          </div>
+          <div class="row">
+            <label for="model">forecast model</label>
+            <select id="model"></select>
+          </div>
+          <div class="row">
+            <label for="hour" id="hourlabel">time</label>
+            <div class="numwrap">
+              <input id="hour" type="range" min="0" max="47" step="1" value="0" />
+            </div>
+          </div>
+          <div class="btnrow">
+            <button id="fetch" class="primary">Fetch sounding</button>
+            <button id="toideal">Back to idealised</button>
+          </div>
+          <p class="note" id="realstatus">
+            Pick a point on the map to load a real forecast sounding. Data from
+            Open-Meteo.
+          </p>
+        </details>
+
         <div id="indices" class="indices"></div>
         <canvas id="sounding"></canvas>
         <details class="group adv" id="io">

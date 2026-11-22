@@ -56,6 +56,8 @@ export class Panel {
     this.build();
   }
 
+  private groupEls: { el: HTMLElement; items: Ctrl[] }[] = [];
+
   private build(): void {
     this.root.innerHTML = "";
     for (const g of this.groups) {
@@ -67,6 +69,7 @@ export class Panel {
       det.appendChild(sum);
       for (const c of g.items) det.appendChild(this.control(c));
       this.root.appendChild(det);
+      this.groupEls.push({ el: det, items: g.items });
     }
     this.refresh();
   }
@@ -152,6 +155,12 @@ export class Panel {
   private updateVisibility(): void {
     for (const v of this.visibility)
       v.el.style.display = v.when(this.cfg) ? "" : "none";
+    // A group whose every control is hidden is itself hidden, so the panel
+    // never shows an empty heading.
+    for (const g of this.groupEls)
+      g.el.style.display = g.items.some((c) => !c.when || c.when(this.cfg))
+        ? ""
+        : "none";
   }
 
   /** Pull every control's value back from the config object. */

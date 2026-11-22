@@ -172,6 +172,20 @@ input.num {
 }
 canvas#sounding { width: 100%; height: 520px; display: block; }
 
+canvas#map {
+  width: 100%;
+  height: 190px;
+  display: block;
+  border-bottom: 1px solid var(--line);
+  cursor: crosshair;
+}
+input.num.wide { width: 100%; }
+#realbox .row { grid-template-columns: 1fr 108px; }
+#realstatus { padding-bottom: 8px; }
+#realstatus.busy { color: var(--accent); }
+#realstatus.bad { color: var(--bad); }
+#realstatus.good { color: var(--good); }
+
 textarea {
   width: 100%;
   background: #0a0e14;

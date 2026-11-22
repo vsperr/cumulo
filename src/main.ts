@@ -7,6 +7,15 @@ import { SCHEMA } from "./ui/schema";
 import { SCHEMA_BASIC } from "./ui/schemaBasic";
 import { PRESETS, configFromPreset } from "./ui/presets";
 import { SoundingPlot } from "./ui/soundingPlot";
+import { WorldMap, type MapPoint } from "./ui/worldMap";
+import {
+  MODELS,
+  fetchColumn,
+  soundingAt,
+  formatTime,
+  nearestHour,
+  type RemoteColumn,
+} from "./core/remoteSounding";
 import SimWorker from "./worker/sim.worker?worker";
 import type { BaseStateMessage, FromWorker, ToWorker } from "./worker/sim.worker";
 import type { Diagnostics } from "./core/solver";
@@ -144,6 +153,129 @@ worker.onmessage = (ev: MessageEvent<FromWorker>) => {
 };
 
 send({ type: "init", cfg });
+
+
+// --- real soundings from forecast models ----------------------------------
+let column: RemoteColumn | null = null;
+let fetchAbort: AbortController | null = null;
+let point: MapPoint = { lat: 35.22, lon: -97.44 }; // Norman, Oklahoma
+
+const latInput = $<HTMLInputElement>("lat");
+const lonInput = $<HTMLInputElement>("lon");
+const modelSel = $<HTMLSelectElement>("model");
+const hourInput = $<HTMLInputElement>("hour");
+
+for (const m of MODELS) {
+  const o = document.createElement("option");
+  o.value = m.id;
+  o.textContent = m.name;
+  o.title = m.note;
+  modelSel.appendChild(o);
+}
+modelSel.value = "icon_seamless";
+
+function setStatus(text: string, kind: "" | "busy" | "bad" | "good" = ""): void {
+  const el = $("realstatus");
+  el.textContent = text;
+  el.className = `note ${kind}`;
+}
+
+function syncPointInputs(): void {
+  latInput.value = point.lat.toFixed(2);
+  lonInput.value = point.lon.toFixed(2);
+}
+
+const map = new WorldMap($<HTMLCanvasElement>("map"), (p) => {
+  point = p;
+  syncPointInputs();
+  void loadColumn();
+});
+syncPointInputs();
+map.setPoint(point, true);
+
+for (const el of [latInput, lonInput]) {
+  el.addEventListener("change", () => {
+    const lat = Number(latInput.value);
+    const lon = Number(lonInput.value);
+    if (!isFinite(lat) || !isFinite(lon)) return;
+    point = { lat: Math.max(-89, Math.min(89, lat)), lon };
+    syncPointInputs();
+    map.setPoint(point, true);
+    void loadColumn();
+  });
+}
+modelSel.addEventListener("change", () => void loadColumn());
+$("fetch").addEventListener("click", () => void loadColumn());
+
+hourInput.addEventListener("input", () => {
+  if (!column) return;
+  applySounding(Number(hourInput.value));
+});
+
+/** Download the forecast column for the chosen point and model. */
+async function loadColumn(): Promise<void> {
+  fetchAbort?.abort();
+  const ctl = new AbortController();
+  fetchAbort = ctl;
+  const name = MODELS.find((m) => m.id === modelSel.value)?.name ?? modelSel.value;
+  setStatus(`Fetching ${name} at ${point.lat.toFixed(2)}, ${point.lon.toFixed(2)}…`, "busy");
+  try {
+    const col = await fetchColumn(point.lat, point.lon, modelSel.value, 2, ctl.signal);
+    column = col;
+    hourInput.max = String(col.times.length - 1);
+    const h = nearestHour(col.times);
+    hourInput.value = String(h);
+    applySounding(h);
+  } catch (e) {
+    if ((e as Error).name === "AbortError") return;
+    column = null;
+    setStatus(
+      `Could not load a sounding: ${(e as Error).message}. Some models only cover their own region.`,
+      "bad"
+    );
+  }
+}
+
+/** Push one hour of the downloaded column into the model as a level table. */
+function applySounding(hour: number): void {
+  if (!column) return;
+  const snd = soundingAt(column, hour);
+  $("hourlabel").textContent = formatTime(snd.time);
+  if (snd.levels.length < 4) {
+    setStatus("That point has too few levels above the terrain.", "bad");
+    return;
+  }
+  cfg.sounding.mode = "table";
+  cfg.sounding.windMode = "table";
+  cfg.sounding.easy = false;
+  cfg.sounding.psfc = snd.psfc;
+  cfg.sounding.levels = snd.levels;
+  rebuildPanel();
+  send({ type: "config", cfg, rebuild: true });
+
+  const domainTop = cfg.grid.nz * cfg.grid.dz;
+  const parts = [
+    `${column.modelName} · ${formatTime(snd.time)}`,
+    `${column.lat.toFixed(2)}, ${column.lon.toFixed(2)} · ground ${snd.elevation.toFixed(0)} m · ${snd.levels.length} levels`,
+    isFinite(snd.sourceCape)
+      ? `Forecast CAPE ${snd.sourceCape.toFixed(0)} J/kg at the sounding's own resolution. The figure below is what this grid resolves — coarse levels always resolve less.`
+      : "",
+  ];
+  if (isFinite(snd.sourceEl) && snd.sourceEl > domainTop)
+    parts.push(
+      `The storm top would be near ${(snd.sourceEl / 1000).toFixed(1)} km but the domain stops at ${(domainTop / 1000).toFixed(1)} km — raise nz or dz to fit it.`
+    );
+  setStatus(parts.filter(Boolean).join(" "), "good");
+}
+
+$("toideal").addEventListener("click", () => {
+  cfg.sounding.mode = "analytic";
+  cfg.sounding.easy = true;
+  cfg.sounding.windMode = "linear";
+  rebuildPanel();
+  send({ type: "config", cfg, rebuild: true });
+  setStatus("Back to the idealised profile.", "");
+});
 
 // --- heads-up display ------------------------------------------------------
 function fmt(x: number, d = 1): string {

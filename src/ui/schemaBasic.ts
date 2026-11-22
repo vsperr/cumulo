@@ -2,6 +2,7 @@ import type { Group } from "./panel";
 import type { Config } from "../core/config";
 
 const volumeMode = (c: Config) => c.render.mode === "volume";
+const ideal = (c: Config) => c.sounding.mode === "analytic";
 const isoMode = (c: Config) => c.render.mode !== "volume";
 
 /**
@@ -16,6 +17,7 @@ export const SCHEMA_BASIC: Group[] = [
     items: [
       {
         path: "sounding.surfaceT",
+        when: ideal,
         label: "surface temperature",
         kind: "range",
         min: -5,
@@ -27,6 +29,7 @@ export const SCHEMA_BASIC: Group[] = [
       },
       {
         path: "sounding.surfaceTd",
+        when: ideal,
         label: "dewpoint",
         kind: "range",
         min: -20,
@@ -38,6 +41,7 @@ export const SCHEMA_BASIC: Group[] = [
       },
       {
         path: "sounding.targetCape",
+        when: ideal,
         label: "CAPE",
         kind: "range",
         min: 0,
@@ -49,6 +53,7 @@ export const SCHEMA_BASIC: Group[] = [
       },
       {
         path: "sounding.zTropopause",
+        when: ideal,
         label: "tropopause height",
         kind: "range",
         min: 4000,
@@ -66,6 +71,7 @@ export const SCHEMA_BASIC: Group[] = [
     items: [
       {
         path: "sounding.windMode",
+        when: ideal,
         label: "wind turns with height",
         kind: "select",
         rebuild: true,
@@ -79,6 +85,7 @@ export const SCHEMA_BASIC: Group[] = [
       },
       {
         path: "sounding.shearMag",
+        when: ideal,
         label: "wind change with height",
         kind: "range",
         min: 0,
@@ -90,6 +97,7 @@ export const SCHEMA_BASIC: Group[] = [
       },
       {
         path: "sounding.shearDepth",
+        when: ideal,
         label: "depth of that change",
         kind: "range",
         min: 500,

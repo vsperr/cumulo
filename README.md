@@ -48,6 +48,40 @@ the analytic profile, every numerical setting and each microphysics rate. The
 simple numbers and the expert ones are the same configuration object, so you
 can set CAPE by hand and then go look at what it did to the profile.
 
+## Real soundings
+
+There is a world map in the right-hand column. Click a point, pick a forecast
+model, and the real atmosphere above that point becomes the model's initial
+condition. The hour slider scrubs through two days of forecast without
+refetching, so you can watch an air mass destabilise through the afternoon and
+start a run from any moment.
+
+Ten models are offered through the [Open-Meteo](https://open-meteo.com) API —
+no key, no account, nothing to install:
+
+| | |
+| --- | --- |
+| **ICON** (DWD) | seamless, global, EU, and the 2 km D2 nest |
+| **ECMWF IFS** | 25 km worldwide |
+| **GFS** (NOAA) | global, with the 3 km HRRR nest over North America |
+| **ARPEGE** (Météo-France), **UKMO**, **GEM** (Canada), **JMA** (Japan) | |
+
+The map is drawn as plain polylines from Natural Earth data — no raster tiles,
+nothing fetched at run time, in keeping with the rest of the project.
+
+### What the grid costs you
+
+A real sounding has far more vertical detail than a 400 m model grid can hold,
+so cumulo reports both numbers: the CAPE of the source sounding at its own
+resolution, and the CAPE this grid actually resolves. Over Cuiabá on a November
+afternoon that is 3616 J/kg in the forecast against 2573 on a 40-level grid —
+a coarse grid smooths the boundary layer and loses roughly a third of the
+positive area. If the storm top would sit above the domain, it says so and
+tells you to raise `nz`.
+
+This is discretisation, not a bug, and every cloud model has it. Most of them
+just do not tell you.
+
 ## What it does
 
 - **Full control of the sounding.** In expert mode: the analytic Weisman–Klemp
@@ -66,6 +100,8 @@ can set CAPE by hand and then go look at what it did to the profile.
   single-scattering, and the grid lines in iso-surface mode are the model's
   actual cells. Three shading modes: volumetric, iso-surface, iso-surface with
   cells.
+- **Real or idealised.** Start from a forecast sounding anywhere on Earth, or
+  from the plain-language air mass above.
 - **Diagnostics while it runs.** Maximum and minimum vertical velocity, cloud
   and rain mixing ratios, cloud top, accumulated rainfall, advective and
   acoustic CFL, and the cost per step.
@@ -161,6 +197,16 @@ Push to `main` with GitHub Pages set to "GitHub Actions" as its source; the
 workflow in `.github/workflows/deploy.yml` builds and publishes `dist/`. For a
 custom domain, add a `public/CNAME` file containing the domain and set it in the
 repository's Pages settings.
+
+## Data and credits
+
+Forecast soundings come from [Open-Meteo](https://open-meteo.com), licensed
+CC-BY-4.0, which in turn redistributes output from DWD, ECMWF, NOAA,
+Météo-France, the UK Met Office, Environment Canada and JMA. Nothing is
+requested until you click the map.
+
+Coastlines and borders are Natural Earth (public domain) via
+[world-atlas](https://github.com/topojson/world-atlas).
 
 ## License
 

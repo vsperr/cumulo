@@ -159,9 +159,14 @@ export function parcelAscent(
     pwat += (0.5 * (qv[k] + qv[k - 1]) * (p[k - 1] - p[k])) / g;
   }
 
+  // CIN is the negative area between the surface and the LFC. With no LFC the
+  // parcel never becomes buoyant, so there is no inhibition to quote: the
+  // running total would otherwise accumulate all the way to the stratosphere.
+  const cinOut = isNaN(lfcZ) ? NaN : -cin;
+
   return {
     cape,
-    cin: -cin,
+    cin: cinOut,
     lclZ,
     lfcZ,
     elZ,
