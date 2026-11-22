@@ -19,6 +19,19 @@ export interface SoundingLevel {
 export interface SoundingConfig {
   mode: SoundingMode;
 
+  /**
+   * --- plain-language inputs ---
+   * When `easy` is on, these three numbers drive the whole thermodynamic
+   * profile: the surface temperature and dewpoint fix the boundary layer and
+   * therefore the cloud base, and the lapse rate aloft is then solved for so
+   * the sounding delivers exactly `targetCape`. The analytic parameters below
+   * are derived from them and stay visible in expert mode.
+   */
+  easy: boolean;
+  surfaceT: number; // deg C
+  surfaceTd: number; // deg C
+  targetCape: number; // J/kg
+
   /** Surface values, used by both modes. */
   psfc: number; // hPa
   thetaSfc: number; // K
@@ -113,7 +126,13 @@ export interface RenderConfig {
   exaggerateZ: number; // vertical stretch of the rendered box
 }
 
+export interface UiConfig {
+  /** Expert mode shows every parameter; basic mode shows the short list. */
+  expert: boolean;
+}
+
 export interface Config {
+  ui: UiConfig;
   grid: GridConfig;
   numerics: NumericsConfig;
   physics: PhysicsConfig;
@@ -124,6 +143,7 @@ export interface Config {
 
 export function defaultConfig(): Config {
   return {
+    ui: { expert: false },
     grid: { nx: 48, ny: 48, nz: 40, dx: 600, dy: 600, dz: 400 },
     numerics: {
       dt: 3,
@@ -151,6 +171,10 @@ export function defaultConfig(): Config {
     },
     sounding: {
       mode: "analytic",
+      easy: true,
+      surfaceT: 25,
+      surfaceTd: 19,
+      targetCape: 2000,
       psfc: 1000,
       thetaSfc: 300,
       thetaTropopause: 343,

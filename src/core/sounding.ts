@@ -1,5 +1,12 @@
-import { Rd, cp, g } from "./constants";
-import { exner, pressureFromExner, qsat, thetaV } from "./thermo";
+import { Rd, cp, g, eps } from "./constants";
+import {
+  exner,
+  pressureFromExner,
+  qsat,
+  thetaV,
+  esat,
+  parcelAscent,
+} from "./thermo";
 import type { Config, SoundingLevel, SoundingConfig } from "./config";
 
 /**
@@ -118,7 +125,7 @@ export function windAt(s: SoundingConfig, z: number): [number, number] {
  * moisture depends on pressure and the pressure depends on the virtual
  * temperature, the column is iterated to convergence.
  */
-export function buildBaseState(cfg: Config): BaseState {
+function buildColumn(cfg: Config): BaseState {
   const { nz, dz } = cfg.grid;
   const s = cfg.sounding;
   const z = new Float64Array(nz);
@@ -219,6 +226,84 @@ export function buildBaseState(cfg: Config): BaseState {
     rhoW,
     thetaVW: thvW,
   };
+}
+
+
+/** Vapour mixing ratio [g/kg] implied by a dewpoint at a given pressure. */
+export function mixingRatioFromDewpoint(tdC: number, psfcHpa: number): number {
+  const e = esat(tdC + 273.15);
+  const p = psfcHpa * 100;
+  return (eps * e) / Math.max(p - e, 1) * 1e3;
+}
+
+/** Surface-based CAPE of the profile a configuration produces [J/kg]. */
+export function capeOf(cfg: Config): number {
+  const b = buildColumn(cfg);
+  return parcelAscent(b.z, b.p, b.theta, b.qv).cape;
+}
+
+/**
+ * Translate the plain-language inputs into the analytic profile parameters.
+ *
+ * Surface temperature and dewpoint set the boundary layer directly, which fixes
+ * the cloud base. The temperature of the upper troposphere is then solved for
+ * by bisection so the sounding delivers the requested CAPE: a colder tropopause
+ * means a steeper lapse rate and a fatter positive area. The search is
+ * monotone, so twenty-odd iterations are plenty, and the result is written back
+ * into the configuration where expert mode can see it.
+ *
+ * Returns the CAPE actually achieved, which differs from the target when the
+ * request is impossible for the given moisture.
+ */
+export function resolveEasySounding(cfg: Config): number {
+  const s = cfg.sounding;
+  if (!s.easy || s.mode !== "analytic") return capeOf(cfg);
+
+  const td = Math.min(s.surfaceTd, s.surfaceT);
+  s.thetaSfc = (s.surfaceT + 273.15) / exner(s.psfc * 100);
+  s.qvMax = mixingRatioFromDewpoint(td, s.psfc);
+  s.rhSfc = 1;
+  s.mixedLayerDepth = 0;
+
+  const probe = (thetaTrop: number): number => {
+    s.thetaTropopause = thetaTrop;
+    return capeOf(cfg);
+  };
+
+  // CAPE decreases as the tropopause potential temperature rises.
+  let lo = s.thetaSfc + 8; // steep lapse rate, large CAPE
+  let hi = s.thetaSfc + 130; // very stable, little or no CAPE
+  const capeLo = probe(lo);
+  const capeHi = probe(hi);
+  if (s.targetCape >= capeLo) {
+    probe(lo);
+    return capeLo;
+  }
+  if (s.targetCape <= capeHi) {
+    probe(hi);
+    return capeHi;
+  }
+  let mid = lo;
+  let cape = capeLo;
+  for (let it = 0; it < 28; it++) {
+    mid = 0.5 * (lo + hi);
+    cape = probe(mid);
+    if (Math.abs(cape - s.targetCape) < 5) break;
+    if (cape > s.targetCape) lo = mid;
+    else hi = mid;
+  }
+  probe(mid);
+  return cape;
+}
+
+/**
+ * Build the base state for a configuration, resolving the plain-language
+ * inputs first when easy mode is on.
+ */
+export function buildBaseState(cfg: Config): BaseState {
+  if (cfg.sounding.easy && cfg.sounding.mode === "analytic")
+    resolveEasySounding(cfg);
+  return buildColumn(cfg);
 }
 
 /** Sample the current base state as an editable level table. */

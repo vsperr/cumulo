@@ -3,6 +3,10 @@ import type { Config } from "../core/config";
 
 const analytic = (c: Config) => c.sounding.mode === "analytic";
 const tabular = (c: Config) => c.sounding.mode === "table";
+/** Plain-language inputs are in charge. */
+const easy = (c: Config) => c.sounding.mode === "analytic" && c.sounding.easy;
+/** The analytic parameters are edited directly. */
+const raw = (c: Config) => c.sounding.mode === "analytic" && !c.sounding.easy;
 
 /** The full set of model knobs, grouped for the panel. */
 export const SCHEMA: Group[] = [
@@ -52,15 +56,19 @@ export const SCHEMA: Group[] = [
     open: true,
     items: [
       { path: "sounding.mode", label: "source", kind: "select", rebuild: true, options: [["analytic", "analytic profile"], ["table", "level table / input_sounding"]] },
+      { path: "sounding.easy", label: "drive from T / Td / CAPE", kind: "bool", rebuild: true, when: analytic, hint: "On: the lapse rate aloft is solved for to hit the requested CAPE. Off: edit the analytic profile directly." },
+      { path: "sounding.surfaceT", label: "surface temperature", kind: "number", min: -10, max: 50, step: 0.5, unit: "deg C", rebuild: true, when: easy },
+      { path: "sounding.surfaceTd", label: "surface dewpoint", kind: "number", min: -30, max: 32, step: 0.5, unit: "deg C", rebuild: true, when: easy },
+      { path: "sounding.targetCape", label: "target CAPE", kind: "number", min: 0, max: 8000, step: 50, unit: "J/kg", rebuild: true, when: easy },
       { path: "sounding.psfc", label: "surface pressure", kind: "number", min: 500, max: 1060, step: 1, unit: "hPa", rebuild: true },
-      { path: "sounding.thetaSfc", label: "surface theta", kind: "number", min: 270, max: 330, step: 0.5, unit: "K", rebuild: true, when: analytic },
-      { path: "sounding.mixedLayerDepth", label: "mixed layer depth", kind: "number", min: 0, max: 4000, step: 50, unit: "m", rebuild: true, when: analytic },
-      { path: "sounding.thetaTropopause", label: "tropopause theta", kind: "number", min: 300, max: 400, step: 1, unit: "K", rebuild: true, when: analytic },
+      { path: "sounding.thetaSfc", label: "surface theta", kind: "number", min: 270, max: 330, step: 0.5, unit: "K", rebuild: true, when: raw },
+      { path: "sounding.mixedLayerDepth", label: "mixed layer depth", kind: "number", min: 0, max: 4000, step: 50, unit: "m", rebuild: true, when: raw },
+      { path: "sounding.thetaTropopause", label: "tropopause theta", kind: "number", min: 300, max: 400, step: 1, unit: "K", rebuild: true, when: raw },
       { path: "sounding.zTropopause", label: "tropopause height", kind: "number", min: 3000, max: 20000, step: 250, unit: "m", rebuild: true, when: analytic },
       { path: "sounding.tempTropopause", label: "tropopause T", kind: "number", min: 180, max: 250, step: 1, unit: "K", rebuild: true, when: analytic },
       { path: "sounding.thetaExponent", label: "theta shape exponent", kind: "range", min: 0.5, max: 3, step: 0.05, rebuild: true, when: analytic },
-      { path: "sounding.qvMax", label: "max mixing ratio", kind: "number", min: 0, max: 26, step: 0.25, unit: "g/kg", rebuild: true, when: analytic },
-      { path: "sounding.rhSfc", label: "surface RH", kind: "range", min: 0, max: 1, step: 0.01, rebuild: true, when: analytic },
+      { path: "sounding.qvMax", label: "max mixing ratio", kind: "number", min: 0, max: 26, step: 0.25, unit: "g/kg", rebuild: true, when: raw },
+      { path: "sounding.rhSfc", label: "surface RH", kind: "range", min: 0, max: 1, step: 0.01, rebuild: true, when: raw },
       { path: "sounding.rhTropopause", label: "tropopause RH", kind: "range", min: 0, max: 1, step: 0.01, rebuild: true, when: analytic },
       { path: "sounding.rhExponent", label: "RH shape exponent", kind: "range", min: 0.5, max: 3, step: 0.05, rebuild: true, when: analytic },
       { path: "sounding.levels", label: "levels: use the import box below", kind: "bool", when: tabular, hint: "Table mode reads the level list; edit it with the input_sounding box." },

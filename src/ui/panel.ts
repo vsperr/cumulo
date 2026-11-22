@@ -16,6 +16,8 @@ export interface Ctrl {
   hint?: string;
   /** Only show the control when this predicate passes. */
   when?: (cfg: Config) => boolean;
+  /** Other config paths that receive the same value (e.g. dy following dx). */
+  mirror?: string[];
 }
 
 export interface Group {
@@ -80,6 +82,7 @@ export class Panel {
 
     const commit = (v: unknown) => {
       setPath(this.cfg, c.path, v);
+      for (const m of c.mirror ?? []) setPath(this.cfg, m, v);
       this.updateVisibility();
       this.onChange(!!c.rebuild);
     };

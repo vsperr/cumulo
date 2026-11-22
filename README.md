@@ -19,20 +19,48 @@ plotting stack before you see a single cloud. The physics is not the hard part.
 The friction is.
 
 cumulo removes the friction. The solver is a thousand lines of TypeScript, it
-runs in a web worker at a few dozen times real time, and the entire state of an
-experiment lives in one URL you can paste to someone.
+runs in a web worker faster than real time, and the entire state of an
+experiment — sounding, numerics, camera-independent view settings — lives in one
+URL you can paste to someone.
+
+Speed depends on the machine and the grid: on an idle laptop the default
+48 × 48 × 40 domain runs at roughly 30× real time, and about 7× when something
+else is using the CPU. Smaller grids are proportionally quicker.
+
+## Two ways in
+
+The model opens in **simple mode**, where an air mass is described the way a
+forecaster would describe it — four numbers:
+
+| You set | What it controls |
+| --- | --- |
+| Surface temperature | How warm it is at the ground |
+| Dewpoint | How humid. The gap to the temperature sets the cloud base, about 125 m per degree |
+| CAPE | The fuel. 1000–2500 J/kg is an ordinary thunderstorm; over 3500 is extreme |
+| Tropopause height | The lid the storm cannot grow past |
+
+CAPE is an input, not an output. You ask for 2500 J/kg and the model solves for
+the lapse rate aloft that delivers exactly that, by bisection on the upper
+tropospheric temperature, keeping your temperature and dewpoint — and therefore
+your cloud base — fixed. The readout tells you in words what you have built:
+*"3996 J/kg — strong storms", "24 m/s shear — supercell shear"*.
+
+**All parameters** switches to the full panel: roughly sixty controls covering
+the analytic profile, every numerical setting and each microphysics rate. The
+simple numbers and the expert ones are the same configuration object, so you
+can set CAPE by hand and then go look at what it did to the profile.
 
 ## What it does
 
-- **Full control of the sounding.** Analytic Weisman–Klemp profile with every
-  exponent and endpoint exposed, or paste a CM1/WRF `input_sounding` table.
-  Hodograph presets from uniform flow to a half-circle; Galilean frame shift to
-  keep the storm in the domain.
+- **Full control of the sounding.** In expert mode: the analytic Weisman–Klemp
+  profile with every exponent and endpoint exposed, or paste a CM1/WRF
+  `input_sounding` table. Hodograph presets from uniform flow to a half-circle;
+  Galilean frame shift to keep the storm in the domain.
 - **Every numerical knob is a control.** Grid size and spacing, the large time
   step, acoustic substeps, divergence damping, Rayleigh sponge, lateral
   boundary condition, Smagorinsky constant, each Kessler rate coefficient,
   Coriolis, surface drag.
-- **Live convective indices.** CAPE, CIN, LCL, LFC, EL, lifted index,
+- **Live convective indices.** In expert mode: CAPE, CIN, LCL, LFC, EL, lifted index,
   precipitable water, 0–1 and 0–6 km shear, 0–3 km storm-relative helicity,
   drawn on a skew-T and a hodograph that update as you type.
 - **A textureless 3D view.** No image textures anywhere in the pipeline. The
@@ -104,6 +132,10 @@ under Node for the headless test.
 
 ## Known limits
 
+- **CAPE is reached by tuning one knob.** The bisection moves the upper
+  tropospheric temperature only. Two soundings with the same CAPE but different
+  shapes of the positive area behave differently, and simple mode cannot
+  express that; expert mode can.
 - **No ice.** Anvils are liquid, there is no melting term, and cold pools are
   biased because of it. This is the biggest physical gap.
 - **Uniform vertical grid.** No stretching, so resolving the boundary layer and

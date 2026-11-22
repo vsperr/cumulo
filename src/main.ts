@@ -4,6 +4,7 @@ import { parseInputSounding } from "./core/sounding";
 import { SceneView } from "./render/renderer";
 import { Panel } from "./ui/panel";
 import { SCHEMA } from "./ui/schema";
+import { SCHEMA_BASIC } from "./ui/schemaBasic";
 import { PRESETS, configFromPreset } from "./ui/presets";
 import { SoundingPlot } from "./ui/soundingPlot";
 import SimWorker from "./worker/sim.worker?worker";
@@ -54,16 +55,25 @@ let running = false;
 let lastFrameWall = performance.now();
 let renderFps = 0;
 
-const panel = new Panel($("panel"), cfg, SCHEMA, (rebuild) => {
-  view.applyRenderConfig(cfg.render);
-  if (rebuild) {
-    view.setGrid(cfg.grid, cfg.render.exaggerateZ);
-    send({ type: "config", cfg, rebuild: true });
-  } else {
-    send({ type: "config", cfg, rebuild: false });
-  }
-  updateHud();
-});
+let panel: Panel;
+
+/** Rebuild the control panel for the current config and UI mode. */
+function rebuildPanel(): void {
+  document.body.dataset.ui = cfg.ui.expert ? "expert" : "basic";
+  $("uimode").textContent = cfg.ui.expert ? "Simple view" : "All parameters";
+  panel = new Panel(
+    $("panel"),
+    cfg,
+    cfg.ui.expert ? SCHEMA : SCHEMA_BASIC,
+    (rebuild) => {
+      view.applyRenderConfig(cfg.render);
+      if (rebuild) view.setGrid(cfg.grid, cfg.render.exaggerateZ);
+      send({ type: "config", cfg, rebuild });
+      updateHud();
+    }
+  );
+}
+rebuildPanel();
 
 // --- preset list -----------------------------------------------------------
 const presetSel = $<HTMLSelectElement>("preset");
@@ -82,23 +92,28 @@ const presetSel = $<HTMLSelectElement>("preset");
 }
 presetSel.addEventListener("change", () => {
   if (!presetSel.value) return;
+  const expert = cfg.ui.expert;
   cfg = configFromPreset(presetSel.value);
+  cfg.ui.expert = expert;
+  const note = PRESETS.find((p) => p.id === presetSel.value)?.note ?? "";
+  $("presetnote").textContent = note;
   applyWholeConfig();
 });
 
 function applyWholeConfig(): void {
-  // The panel holds a live reference, so rebuild it against the new object.
-  const p = new Panel($("panel"), cfg, SCHEMA, (rebuild) => {
-    view.applyRenderConfig(cfg.render);
-    if (rebuild) view.setGrid(cfg.grid, cfg.render.exaggerateZ);
-    send({ type: "config", cfg, rebuild });
-    updateHud();
-  });
-  void p;
+  // The panel holds a live reference to the config, so rebuild it.
+  rebuildPanel();
   view.setGrid(cfg.grid, cfg.render.exaggerateZ);
   view.applyRenderConfig(cfg.render);
   send({ type: "config", cfg, rebuild: true });
 }
+
+$("uimode").addEventListener("click", () => {
+  cfg.ui.expert = !cfg.ui.expert;
+  rebuildPanel();
+  updateHud();
+  updateIndices();
+});
 
 // --- worker messages -------------------------------------------------------
 worker.onmessage = (ev: MessageEvent<FromWorker>) => {
@@ -148,6 +163,20 @@ function updateHud(): void {
     ? (cfg.numerics.dt / Math.max(cfg.numerics.acousticSteps, 1)) /
       base.maxAcousticDt
     : 0;
+  if (!cfg.ui.expert) {
+    const gust = Math.abs(diag.minW);
+    h.textContent = [
+      `elapsed     ${String(mm).padStart(3)}:${String(ss).padStart(2, "0")}`,
+      `updraft     ${diag.maxW.toFixed(0)} m/s   downdraft ${gust.toFixed(0)} m/s`,
+      `cloud top   ${(diag.cloudTop / 1000).toFixed(1)} km`,
+      `rain so far ${diag.maxRainAccum.toFixed(0)} mm`,
+      `running at  ${(cfg.numerics.dt / (msPerStep / 1000)).toFixed(0)}x real time`,
+    ].join("\n");
+    if (!diag.stable)
+      showWarn("The run blew up. Press Reset, and lower the cell size or CAPE.");
+    else hideWarn();
+    return;
+  }
   h.textContent = [
     `t         ${String(mm).padStart(3)}:${String(ss).padStart(2, "0")}   step ${diag.steps}`,
     `w         ${fmt(diag.maxW, 2)} / ${diag.minW.toFixed(2)} m/s`,
@@ -188,6 +217,35 @@ function updateIndices(): void {
   const b = base;
   const g = (x: number, d = 0, u = "") =>
     isFinite(x) ? `${x.toFixed(d)}${u}` : "—";
+
+  if (!cfg.ui.expert) {
+    const verdict =
+      b.cape < 300
+        ? "little to work with"
+        : b.cape < 1200
+        ? "weak storms"
+        : b.cape < 2500
+        ? "ordinary thunderstorms"
+        : b.cape < 4000
+        ? "strong storms"
+        : "extreme instability";
+    const org =
+      b.shear6 < 10
+        ? "too little shear to organise — expect a short-lived pulse"
+        : b.shear6 < 20
+        ? "enough shear for multicells"
+        : "supercell shear";
+    $("indices").textContent = [
+      `fuel (CAPE)   ${g(b.cape, 0)} J/kg — ${verdict}`,
+      `cap (CIN)     ${g(b.cin, 0)} J/kg`,
+      `cloud base    ${g(b.lclZ, 0)} m`,
+      `storm top     ${g(b.elZ, 0)} m`,
+      `shear 0-6 km  ${g(b.shear6, 1)} m/s — ${org}`,
+      `water column  ${g(b.pwat, 1)} mm`,
+    ].join("\n");
+    return;
+  }
+
   $("indices").textContent = [
     `CAPE      ${g(b.cape, 0)} J/kg      CIN  ${g(b.cin, 0)} J/kg`,
     `LCL       ${g(b.lclZ, 0)} m         LFC  ${g(b.lfcZ, 0)} m`,

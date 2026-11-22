@@ -18,13 +18,16 @@
       <h1>cumulo</h1>
       <span class="tag">non-hydrostatic cloud model · in the browser</span>
       <div class="spacer"></div>
-      <select id="preset" title="Idealised set-ups"></select>
+      <select id="preset" title="Ready-made set-ups"></select>
       <button id="run" class="primary">Run</button>
-      <button id="step1">+1 step</button>
-      <button id="step60">+60 s</button>
+      <button id="step1" class="adv">+1 step</button>
+      <button id="step60" class="adv">+60 s</button>
       <button id="reset">Reset</button>
       <button id="share" title="Copy a link that reproduces this run">Share</button>
       <button id="png" title="Save the current view">PNG</button>
+      <button id="uimode" title="Switch between the short list and every parameter">
+        All parameters
+      </button>
       <a
         class="ghost"
         id="repo"
@@ -36,7 +39,10 @@
     </header>
 
     <main>
-      <aside id="panel" class="side"></aside>
+      <div class="side">
+        <p id="presetnote" class="presetnote"></p>
+        <div id="panel"></div>
+      </div>
 
       <section class="view">
         <canvas id="gl"></canvas>
@@ -51,7 +57,7 @@
       <aside class="side right">
         <div id="indices" class="indices"></div>
         <canvas id="sounding"></canvas>
-        <details class="group" id="io">
+        <details class="group adv" id="io">
           <summary>Sounding &amp; configuration I/O</summary>
           <p class="note">
             CM1 / WRF <code>input_sounding</code> format: first line
