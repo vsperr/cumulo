@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>cumulo — cloud-resolving convection in the browser</title>
+    <meta
+      name="description"
+      content="A non-hydrostatic cloud model that runs in your browser: edit the sounding by hand, watch the storm grow in an untextured 3D view."
+    />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='12' cy='19' r='7' fill='%23e8edf5'/%3E%3Ccircle cx='21' cy='17' r='6' fill='%23cfd8e6'/%3E%3Crect x='5' y='22' width='23' height='5' rx='2.5' fill='%23aeb9cc'/%3E%3C/svg%3E"
+    />
+  </head>
+  <body>
+    <header>
+      <h1>cumulo</h1>
+      <span class="tag">non-hydrostatic cloud model · in the browser</span>
+      <div class="spacer"></div>
+      <select id="preset" title="Idealised set-ups"></select>
+      <button id="run" class="primary">Run</button>
+      <button id="step1">+1 step</button>
+      <button id="step60">+60 s</button>
+      <button id="reset">Reset</button>
+      <button id="share" title="Copy a link that reproduces this run">Share</button>
+      <button id="png" title="Save the current view">PNG</button>
+      <a
+        class="ghost"
+        id="repo"
+        href="https://github.com/"
+        target="_blank"
+        rel="noopener"
+        >source</a
+      >
+    </header>
+
+    <main>
+      <aside id="panel" class="side"></aside>
+
+      <section class="view">
+        <canvas id="gl"></canvas>
+        <div id="hud" class="hud"></div>
+        <div id="warn" class="warn" hidden></div>
+        <div class="legend">
+          drag to orbit · scroll to zoom · the view has no textures: the cloud is
+          the model's own water field, lit by ray-marched sunlight
+        </div>
+      </section>
+
+      <aside class="side right">
+        <div id="indices" class="indices"></div>
+        <canvas id="sounding"></canvas>
+        <details class="group" id="io">
+          <summary>Sounding &amp; configuration I/O</summary>
+          <p class="note">
+            CM1 / WRF <code>input_sounding</code> format: first line
+            <code>psfc(hPa) theta(K) qv(g/kg)</code>, then one line per level
+            <code>z(m) theta(K) qv(g/kg) u(m/s) v(m/s)</code>.
+          </p>
+          <textarea id="sndtext" spellcheck="false" rows="8"></textarea>
+          <div class="btnrow">
+            <button id="sndload">Load sounding</button>
+            <button id="snddump">Fill from current</button>
+          </div>
+          <div class="btnrow">
+            <button id="cfgdump">Export config JSON</button>
+            <button id="cfgload">Import config JSON</button>
+          </div>
+        </details>
+      </aside>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

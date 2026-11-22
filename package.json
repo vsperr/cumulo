@@ -1,0 +1,23 @@
+{
+  "name": "cumulo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Browser-based cloud-resolving convection model with a textureless 3D view and fully editable soundings",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "sim": "tsx test/run.ts"
+  },
+  "dependencies": {
+    "three": "0.169.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/three": "0.169.0",
+    "tsx": "4.19.2",
+    "typescript": "5.6.3",
+    "vite": "5.4.11"
+  }
+}

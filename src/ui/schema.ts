@@ -1,0 +1,113 @@
+import type { Group } from "./panel";
+import type { Config } from "../core/config";
+
+const analytic = (c: Config) => c.sounding.mode === "analytic";
+const tabular = (c: Config) => c.sounding.mode === "table";
+
+/** The full set of model knobs, grouped for the panel. */
+export const SCHEMA: Group[] = [
+  {
+    title: "Grid",
+    open: true,
+    items: [
+      { path: "grid.nx", label: "nx", kind: "number", min: 8, max: 192, step: 1, rebuild: true, hint: "Cells in x. Cost grows as nx*ny*nz." },
+      { path: "grid.ny", label: "ny", kind: "number", min: 8, max: 192, step: 1, rebuild: true },
+      { path: "grid.nz", label: "nz", kind: "number", min: 8, max: 128, step: 1, rebuild: true },
+      { path: "grid.dx", label: "dx", kind: "number", min: 20, max: 4000, step: 10, unit: "m", rebuild: true },
+      { path: "grid.dy", label: "dy", kind: "number", min: 20, max: 4000, step: 10, unit: "m", rebuild: true },
+      { path: "grid.dz", label: "dz", kind: "number", min: 20, max: 1000, step: 10, unit: "m", rebuild: true },
+    ],
+  },
+  {
+    title: "Time stepping",
+    items: [
+      { path: "numerics.dt", label: "dt", kind: "number", min: 0.1, max: 30, step: 0.1, unit: "s", hint: "Large (advective) step." },
+      { path: "numerics.acousticSteps", label: "acoustic substeps", kind: "number", min: 1, max: 24, step: 1, hint: "Target substeps per large step for the sound waves." },
+      { path: "numerics.autoAcoustic", label: "auto substeps", kind: "bool", hint: "Raise the substep count automatically when the acoustic CFL would exceed 1." },
+      { path: "numerics.divergenceDamping", label: "divergence damping", kind: "range", min: 0, max: 0.3, step: 0.01 },
+      { path: "numerics.boundary", label: "lateral boundary", kind: "select", options: [["periodic", "periodic"], ["open", "zero gradient"]] },
+      { path: "numerics.rayleighDepth", label: "sponge depth", kind: "number", min: 0, max: 12000, step: 200, unit: "m" },
+      { path: "numerics.rayleighRate", label: "sponge rate", kind: "number", min: 0, max: 0.05, step: 0.001, unit: "1/s" },
+      { path: "numerics.stepsPerFrame", label: "steps per frame", kind: "number", min: 1, max: 20, step: 1 },
+    ],
+  },
+  {
+    title: "Physics",
+    items: [
+      { path: "physics.microphysics", label: "warm rain (Kessler)", kind: "bool" },
+      { path: "physics.autoconversionThreshold", label: "autoconv. threshold", kind: "number", min: 0, max: 0.005, step: 0.0001, unit: "kg/kg" },
+      { path: "physics.autoconversionRate", label: "autoconv. rate", kind: "number", min: 0, max: 0.01, step: 0.0001, unit: "1/s" },
+      { path: "physics.accretionRate", label: "accretion rate", kind: "number", min: 0, max: 10, step: 0.1 },
+      { path: "physics.rainEvaporation", label: "rain evaporation", kind: "range", min: 0, max: 3, step: 0.05 },
+      { path: "physics.rainFallSpeed", label: "rain fall speed", kind: "range", min: 0, max: 3, step: 0.05 },
+      { path: "physics.smagorinsky", label: "Smagorinsky Cs", kind: "range", min: 0, max: 0.4, step: 0.01 },
+      { path: "physics.backgroundDiffusion", label: "background diffusion", kind: "number", min: 0, max: 500, step: 1, unit: "m2/s" },
+      { path: "physics.surfaceDrag", label: "surface drag Cd", kind: "number", min: 0, max: 0.05, step: 0.001 },
+      { path: "physics.coriolis", label: "Coriolis", kind: "bool" },
+      { path: "physics.latitude", label: "latitude", kind: "range", min: -90, max: 90, step: 1, unit: "deg" },
+    ],
+  },
+  {
+    title: "Sounding",
+    open: true,
+    items: [
+      { path: "sounding.mode", label: "source", kind: "select", rebuild: true, options: [["analytic", "analytic profile"], ["table", "level table / input_sounding"]] },
+      { path: "sounding.psfc", label: "surface pressure", kind: "number", min: 500, max: 1060, step: 1, unit: "hPa", rebuild: true },
+      { path: "sounding.thetaSfc", label: "surface theta", kind: "number", min: 270, max: 330, step: 0.5, unit: "K", rebuild: true, when: analytic },
+      { path: "sounding.mixedLayerDepth", label: "mixed layer depth", kind: "number", min: 0, max: 4000, step: 50, unit: "m", rebuild: true, when: analytic },
+      { path: "sounding.thetaTropopause", label: "tropopause theta", kind: "number", min: 300, max: 400, step: 1, unit: "K", rebuild: true, when: analytic },
+      { path: "sounding.zTropopause", label: "tropopause height", kind: "number", min: 3000, max: 20000, step: 250, unit: "m", rebuild: true, when: analytic },
+      { path: "sounding.tempTropopause", label: "tropopause T", kind: "number", min: 180, max: 250, step: 1, unit: "K", rebuild: true, when: analytic },
+      { path: "sounding.thetaExponent", label: "theta shape exponent", kind: "range", min: 0.5, max: 3, step: 0.05, rebuild: true, when: analytic },
+      { path: "sounding.qvMax", label: "max mixing ratio", kind: "number", min: 0, max: 26, step: 0.25, unit: "g/kg", rebuild: true, when: analytic },
+      { path: "sounding.rhSfc", label: "surface RH", kind: "range", min: 0, max: 1, step: 0.01, rebuild: true, when: analytic },
+      { path: "sounding.rhTropopause", label: "tropopause RH", kind: "range", min: 0, max: 1, step: 0.01, rebuild: true, when: analytic },
+      { path: "sounding.rhExponent", label: "RH shape exponent", kind: "range", min: 0.5, max: 3, step: 0.05, rebuild: true, when: analytic },
+      { path: "sounding.levels", label: "levels: use the import box below", kind: "bool", when: tabular, hint: "Table mode reads the level list; edit it with the input_sounding box." },
+    ],
+  },
+  {
+    title: "Wind profile",
+    open: true,
+    items: [
+      { path: "sounding.windMode", label: "hodograph", kind: "select", rebuild: true, options: [["none", "uniform"], ["linear", "straight shear"], ["quarterCircle", "quarter circle"], ["halfCircle", "half circle"], ["table", "from level table"]] },
+      { path: "sounding.shearMag", label: "shear magnitude", kind: "number", min: 0, max: 60, step: 0.5, unit: "m/s", rebuild: true },
+      { path: "sounding.shearDepth", label: "shear depth", kind: "number", min: 250, max: 14000, step: 250, unit: "m", rebuild: true },
+      { path: "sounding.uSfc", label: "surface u", kind: "number", min: -40, max: 40, step: 0.5, unit: "m/s", rebuild: true },
+      { path: "sounding.vSfc", label: "surface v", kind: "number", min: -40, max: 40, step: 0.5, unit: "m/s", rebuild: true },
+      { path: "sounding.galileanU", label: "frame u", kind: "number", min: -40, max: 40, step: 0.5, unit: "m/s", rebuild: true, hint: "Subtracted from the whole profile: keeps the storm inside the domain." },
+      { path: "sounding.galileanV", label: "frame v", kind: "number", min: -40, max: 40, step: 0.5, unit: "m/s", rebuild: true },
+    ],
+  },
+  {
+    title: "Initial perturbation",
+    items: [
+      { path: "bubble.enabled", label: "warm bubble", kind: "bool", rebuild: true },
+      { path: "bubble.amplitude", label: "amplitude", kind: "range", min: 0, max: 10, step: 0.1, unit: "K", rebuild: true },
+      { path: "bubble.radiusH", label: "horizontal radius", kind: "number", min: 200, max: 20000, step: 100, unit: "m", rebuild: true },
+      { path: "bubble.radiusV", label: "vertical radius", kind: "number", min: 100, max: 8000, step: 50, unit: "m", rebuild: true },
+      { path: "bubble.centerX", label: "centre x", kind: "range", min: 0, max: 1, step: 0.01, rebuild: true },
+      { path: "bubble.centerY", label: "centre y", kind: "range", min: 0, max: 1, step: 0.01, rebuild: true },
+      { path: "bubble.centerZ", label: "centre height", kind: "number", min: 0, max: 8000, step: 100, unit: "m", rebuild: true },
+      { path: "bubble.moisten", label: "extra moisture", kind: "range", min: 0, max: 1, step: 0.01, rebuild: true },
+      { path: "bubble.noise", label: "theta noise", kind: "range", min: 0, max: 1, step: 0.01, unit: "K", rebuild: true },
+    ],
+  },
+  {
+    title: "View",
+    open: true,
+    items: [
+      { path: "render.mode", label: "shading", kind: "select", options: [["volume", "volumetric"], ["surface", "iso-surface"], ["wire", "iso-surface + cells"]] },
+      { path: "render.field", label: "field", kind: "select", options: [["total", "cloud + rain"], ["cloud", "cloud water"], ["rain", "rain water"], ["updraft", "vertical velocity"]] },
+      { path: "render.threshold", label: "iso level", kind: "range", min: 0.001, max: 3, step: 0.001, unit: "g/kg" },
+      { path: "render.density", label: "opacity", kind: "range", min: 0.05, max: 5, step: 0.05 },
+      { path: "render.steps", label: "raymarch samples", kind: "number", min: 24, max: 512, step: 8 },
+      { path: "render.sunAzimuth", label: "sun azimuth", kind: "range", min: 0, max: 360, step: 1, unit: "deg" },
+      { path: "render.sunElevation", label: "sun elevation", kind: "range", min: 2, max: 89, step: 1, unit: "deg" },
+      { path: "render.showUpdraft", label: "tint updrafts", kind: "bool" },
+      { path: "render.showBox", label: "domain box", kind: "bool" },
+      { path: "render.showGround", label: "ground grid", kind: "bool" },
+      { path: "render.exaggerateZ", label: "vertical stretch", kind: "range", min: 0.25, max: 3, step: 0.05 },
+    ],
+  },
+];
