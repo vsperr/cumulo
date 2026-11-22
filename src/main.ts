@@ -45,6 +45,7 @@ function hashFromConfig(c: Config): string {
   return `#c=${b64}`;
 }
 
+const sharedLink = location.hash.startsWith("#c=");
 let cfg: Config = configFromHash() ?? defaultConfig();
 
 // --- scene, panel, diagram -------------------------------------------------
@@ -289,6 +290,96 @@ $("toideal").addEventListener("click", () => {
   rebuildPanel();
   send({ type: "config", cfg, rebuild: true });
   setStatus("Back to the idealised profile.", "");
+});
+
+
+// --- device profile --------------------------------------------------------
+const deviceSel = $<HTMLSelectElement>("device");
+let activeDevice: "desktop" | "mobile" | null = null;
+
+function detectMobile(): boolean {
+  const narrow = window.matchMedia("(max-width: 820px)").matches;
+  const coarseAndSmall =
+    window.matchMedia("(pointer: coarse)").matches &&
+    window.matchMedia("(max-width: 1100px)").matches;
+  return narrow || coarseAndSmall;
+}
+
+function effectiveDevice(): "desktop" | "mobile" {
+  return cfg.ui.device === "auto"
+    ? detectMobile()
+      ? "mobile"
+      : "desktop"
+    : cfg.ui.device;
+}
+
+/**
+ * Settings each device can actually keep up with. Ray marching costs a shader
+ * run per pixel per sample and the solver costs a pass per cell, so a phone
+ * gets a smaller domain, fewer samples and a capped pixel ratio rather than a
+ * slide show.
+ */
+function profileFor(dev: "desktop" | "mobile"): Partial<Config> {
+  return dev === "mobile"
+    ? {
+        grid: { nx: 32, ny: 32, nz: 32, dx: 800, dy: 800, dz: 500 },
+        render: { ...cfg.render, steps: 72 },
+      }
+    : {
+        grid: { nx: 48, ny: 48, nz: 40, dx: 600, dy: 600, dz: 400 },
+        render: { ...cfg.render, steps: 160 },
+      };
+}
+
+function applyDevice(dev: "desktop" | "mobile", retune: boolean): void {
+  const changed = activeDevice !== dev;
+  activeDevice = dev;
+  document.body.dataset.device = dev;
+  view.setPixelRatioCap(dev === "mobile" ? 1.25 : 2);
+  map.hint =
+    dev === "mobile"
+      ? "tap to pick · pinch to zoom · drag to pan"
+      : "click to pick · scroll to zoom · drag to pan";
+  map.draw();
+
+  if (retune && changed) {
+    const prof = profileFor(dev);
+    Object.assign(cfg.grid, prof.grid);
+    cfg.render.steps = prof.render!.steps;
+    rebuildPanel();
+    view.setGrid(cfg.grid, cfg.render.exaggerateZ);
+    view.applyRenderConfig(cfg.render);
+    send({ type: "config", cfg, rebuild: true });
+  }
+  view.resize();
+  view.frameDomain();
+}
+
+deviceSel.value = cfg.ui.device;
+deviceSel.addEventListener("change", () => {
+  cfg.ui.device = deviceSel.value as Config["ui"]["device"];
+  applyDevice(effectiveDevice(), true);
+});
+
+// --- mobile tab bar --------------------------------------------------------
+const tabButtons = Array.from(
+  document.querySelectorAll("#tabs button")
+) as HTMLButtonElement[];
+function setTab(name: string): void {
+  document.body.dataset.tab = name;
+  for (const b of tabButtons) b.classList.toggle("on", b.dataset.tab === name);
+  // The canvas was hidden while another tab was up, so its size is stale.
+  requestAnimationFrame(() => view.resize());
+}
+for (const b of tabButtons)
+  b.addEventListener("click", () => setTab(b.dataset.tab ?? "view"));
+setTab("view");
+
+// Only downgrade automatically; a shared link keeps the settings it carries.
+applyDevice(effectiveDevice(), !sharedLink && effectiveDevice() === "mobile");
+
+window.addEventListener("resize", () => {
+  if (cfg.ui.device === "auto") applyDevice(effectiveDevice(), true);
 });
 
 // --- heads-up display ------------------------------------------------------

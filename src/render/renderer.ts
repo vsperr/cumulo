@@ -93,12 +93,35 @@ export class SceneView {
     window.addEventListener("resize", () => this.resize());
   }
 
+  /**
+   * Cap the device pixel ratio. Ray marching costs a fragment shader run per
+   * pixel per sample, so a phone's 3x display is the single most expensive
+   * thing about this view.
+   */
+  setPixelRatioCap(cap: number): void {
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, cap));
+    this.resize();
+  }
+
+  /** Vertical field of view on a wide screen; narrow screens widen it. */
+  private baseFov = 42;
+
   resize(): void {
     const c = this.renderer.domElement;
     const w = c.clientWidth || 1;
     const h = c.clientHeight || 1;
     this.renderer.setSize(w, h, false);
-    this.camera.aspect = w / h;
+    const aspect = w / h;
+    this.camera.aspect = aspect;
+    // On a portrait screen a fixed vertical FOV crops the domain horizontally.
+    // Hold the *horizontal* field of view instead, so the box always fits.
+    if (aspect < 1) {
+      const halfH = Math.tan((this.baseFov * Math.PI) / 360);
+      const fov = (2 * Math.atan(halfH / aspect) * 180) / Math.PI;
+      this.camera.fov = Math.min(fov, 80);
+    } else {
+      this.camera.fov = this.baseFov;
+    }
     this.camera.updateProjectionMatrix();
   }
 
@@ -143,6 +166,7 @@ export class SceneView {
     this.groundHolder.add(this.ground);
 
     (this.material.uniforms.uGridCells.value as THREE.Vector3).set(nx, ny, nz);
+    if (changed) this.frameDomain();
 
     if (changed) {
       this.texture?.dispose();
@@ -160,6 +184,20 @@ export class SceneView {
       this.texture = tex;
       this.material.uniforms.uField.value = tex;
     }
+  }
+
+  /** Place the camera so the whole domain is comfortably in shot. */
+  frameDomain(): void {
+    const b = this.boxSize;
+    const radius = 0.5 * Math.hypot(b.x, b.y, b.z);
+    const vFov = (this.camera.fov * Math.PI) / 180;
+    const hFov = 2 * Math.atan(Math.tan(vFov / 2) * Math.min(this.camera.aspect, 1));
+    const dist = (radius * 1.12) / Math.sin(Math.max(Math.min(vFov, hFov), 0.2) / 2);
+    const dir = new THREE.Vector3(0.62, 0.42, 0.72).normalize();
+    const target = new THREE.Vector3(0, b.y * 0.5, 0);
+    this.camera.position.copy(target).addScaledVector(dir, dist);
+    this.controls.target.copy(target);
+    this.controls.update();
   }
 
   /** Upload a frame: interleaved RGBA = cloud [g/kg], rain [g/kg], w [m/s]. */

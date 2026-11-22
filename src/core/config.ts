@@ -126,9 +126,17 @@ export interface RenderConfig {
   exaggerateZ: number; // vertical stretch of the rendered box
 }
 
+export type DeviceMode = "auto" | "desktop" | "mobile";
+
 export interface UiConfig {
   /** Expert mode shows every parameter; basic mode shows the short list. */
   expert: boolean;
+  /**
+   * Layout and performance profile. "auto" follows the screen and the pointer;
+   * the explicit values let a phone run the desktop layout and the other way
+   * round, which is also how the layout gets tested from a desktop browser.
+   */
+  device: DeviceMode;
 }
 
 export interface Config {
@@ -143,7 +151,7 @@ export interface Config {
 
 export function defaultConfig(): Config {
   return {
-    ui: { expert: false },
+    ui: { expert: false, device: "auto" },
     grid: { nx: 48, ny: 48, nz: 40, dx: 600, dy: 600, dz: 400 },
     numerics: {
       dt: 3,

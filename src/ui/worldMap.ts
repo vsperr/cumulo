@@ -46,6 +46,8 @@ export class WorldMap {
   private last: [number, number] = [0, 0];
   private point: MapPoint | null = null;
   private hover: MapPoint | null = null;
+  /** Wording of the on-canvas hint, set to match the pointing device. */
+  hint = "click to pick · scroll to zoom · drag to pan";
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -92,21 +94,83 @@ export class WorldMap {
     return { lat, lon };
   }
 
+  /**
+   * Pointer events throughout, so a finger works exactly like a mouse: one
+   * pointer drags or picks, two pinch to zoom. Touch-action is disabled on the
+   * canvas so the page does not scroll out from under the gesture.
+   */
   private bind(): void {
     const c = this.canvas;
-    const pos = (e: MouseEvent): [number, number] => {
+    c.style.touchAction = "none";
+    const active = new Map<number, [number, number]>();
+    let pinchDist = 0;
+    let pinchMid: [number, number] = [0, 0];
+
+    const pos = (e: PointerEvent): [number, number] => {
       const r = c.getBoundingClientRect();
       return [e.clientX - r.left, e.clientY - r.top];
     };
-    c.addEventListener("mousedown", (e) => {
-      this.dragging = true;
-      this.dragMoved = 0;
-      this.last = pos(e);
+    const centre = (): [number, number] => {
+      const pts = [...active.values()];
+      return [
+        pts.reduce((a, p) => a + p[0], 0) / pts.length,
+        pts.reduce((a, p) => a + p[1], 0) / pts.length,
+      ];
+    };
+    const spread = (): number => {
+      const pts = [...active.values()];
+      return pts.length < 2 ? 0 : Math.hypot(pts[0][0] - pts[1][0], pts[0][1] - pts[1][1]);
+    };
+    /** Zoom by `factor` while keeping the point under `anchor` fixed. */
+    const zoomAt = (anchor: [number, number], factor: number): void => {
+      const before = this.unproject(anchor[0], anchor[1]);
+      this.k = Math.max(0.35, Math.min(60, this.k * factor));
+      const after = this.unproject(anchor[0], anchor[1]);
+      this.lonCenter += before.lon - after.lon;
+      this.latCenter += before.lat - after.lat;
+    };
+
+    c.addEventListener("pointerdown", (e) => {
+      c.setPointerCapture(e.pointerId);
+      active.set(e.pointerId, pos(e));
+      if (active.size === 1) {
+        this.dragging = true;
+        this.dragMoved = 0;
+        this.last = pos(e);
+      } else if (active.size === 2) {
+        this.dragging = false;
+        pinchDist = spread();
+        pinchMid = centre();
+      }
     });
-    window.addEventListener("mouseup", () => (this.dragging = false));
-    c.addEventListener("mousemove", (e) => {
+
+    c.addEventListener("pointermove", (e) => {
       const p = pos(e);
-      this.hover = this.unproject(p[0], p[1]);
+      if (!active.has(e.pointerId)) {
+        // Hover with a mouse; a finger that is not down reports nothing.
+        if (e.pointerType === "mouse") {
+          this.hover = this.unproject(p[0], p[1]);
+          this.draw();
+        }
+        return;
+      }
+      active.set(e.pointerId, p);
+
+      if (active.size >= 2) {
+        const d = spread();
+        const mid = centre();
+        if (pinchDist > 0 && d > 0) zoomAt(mid, d / pinchDist);
+        // Two-finger drag pans as well.
+        this.lonCenter -= (mid[0] - pinchMid[0]) / this.k;
+        this.latCenter += (mid[1] - pinchMid[1]) / this.k;
+        this.latCenter = Math.max(-85, Math.min(85, this.latCenter));
+        pinchDist = d;
+        pinchMid = mid;
+        this.dragMoved = 999; // a pinch is never a pick
+        this.draw();
+        return;
+      }
+
       if (this.dragging) {
         const dx = p[0] - this.last[0];
         const dy = p[1] - this.last[1];
@@ -116,31 +180,48 @@ export class WorldMap {
         this.latCenter = Math.max(-85, Math.min(85, this.latCenter));
         this.last = p;
       }
+      if (e.pointerType === "mouse") this.hover = this.unproject(p[0], p[1]);
       this.draw();
     });
-    c.addEventListener("mouseleave", () => {
+
+    const release = (e: PointerEvent) => {
+      const was = active.get(e.pointerId);
+      active.delete(e.pointerId);
+      if (active.size === 0) {
+        const wasDragging = this.dragging;
+        this.dragging = false;
+        // A tap (or click) that did not move is a pick.
+        if (wasDragging && this.dragMoved <= 6 && was) {
+          const p = this.unproject(was[0], was[1]);
+          this.point = p;
+          this.draw();
+          this.onPick(p);
+          return;
+        }
+      } else if (active.size === 1) {
+        // Lifting one finger of a pinch: carry on dragging with the other.
+        this.last = [...active.values()][0];
+        this.dragging = true;
+      }
+      this.draw();
+    };
+    c.addEventListener("pointerup", release);
+    c.addEventListener("pointercancel", release);
+
+    c.addEventListener("pointerleave", () => {
       this.hover = null;
       this.draw();
     });
-    c.addEventListener("click", (e) => {
-      if (this.dragMoved > 4) return; // that was a pan, not a pick
-      const [x, y] = pos(e);
-      const p = this.unproject(x, y);
-      this.point = p;
-      this.draw();
-      this.onPick(p);
-    });
+
     c.addEventListener(
       "wheel",
       (e) => {
         e.preventDefault();
-        const [x, y] = pos(e);
-        const before = this.unproject(x, y);
-        const f = Math.exp(-e.deltaY * 0.0015);
-        this.k = Math.max(0.35, Math.min(60, this.k * f));
-        const after = this.unproject(x, y);
-        this.lonCenter += before.lon - after.lon;
-        this.latCenter += before.lat - after.lat;
+        const r = c.getBoundingClientRect();
+        zoomAt(
+          [e.clientX - r.left, e.clientY - r.top],
+          Math.exp(-e.deltaY * 0.0015)
+        );
         this.draw();
       },
       { passive: false }
@@ -245,6 +326,6 @@ export class WorldMap {
     g.fillStyle = "#5c6b80";
     g.font = "9.5px ui-sans-serif, system-ui, sans-serif";
     g.textAlign = "right";
-    g.fillText("click to pick · scroll to zoom · drag to pan", w - 6, h - 6);
+    g.fillText(this.hint, w - 6, h - 6);
   }
 }

@@ -28,6 +28,11 @@
       <button id="uimode" title="Switch between the short list and every parameter">
         All parameters
       </button>
+      <select id="device" title="Layout and performance profile">
+        <option value="auto">auto</option>
+        <option value="desktop">PC</option>
+        <option value="mobile">mobile</option>
+      </select>
       <a
         class="ghost"
         id="repo"
@@ -39,7 +44,7 @@
     </header>
 
     <main>
-      <div class="side">
+      <div class="side" id="panelside">
         <p id="presetnote" class="presetnote"></p>
         <div id="panel"></div>
       </div>
@@ -111,6 +116,12 @@
         </details>
       </aside>
     </main>
+
+    <nav class="tabs" id="tabs">
+      <button data-tab="view">Storm</button>
+      <button data-tab="setup">Settings</button>
+      <button data-tab="air">Atmosphere</button>
+    </nav>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

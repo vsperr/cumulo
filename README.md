@@ -25,6 +25,16 @@ Speed depends on the machine and the grid: on an idle laptop the default
 48 × 48 × 40 domain runs at roughly 30× real time, and about 7× when something
 else is using the CPU. Smaller grids are proportionally quicker.
 
+## On a phone
+
+The layout switches itself: the 3D view goes full-bleed and the panels become
+tabs along the bottom. The map takes taps, pinches and drags. A phone also gets
+a lighter profile — a 32 × 32 × 32 domain, fewer ray-march samples and a capped
+pixel ratio — because ray marching costs a shader run per pixel per sample and
+a 3x display is the most expensive thing on screen. The `auto / PC / mobile`
+selector in the header overrides the choice either way, which is also how the
+phone layout gets tested from a desktop browser.
+
 ## Two ways in
 
 The model opens in **simple mode**, where an air mass is described the way a
