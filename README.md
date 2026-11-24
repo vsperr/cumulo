@@ -7,6 +7,12 @@ warm-rain microphysics — the same class of model as [CM1][cm1] — and draws t
 result as an untextured 3D volume. You set the sounding by hand, press Run, and
 watch what the atmosphere does with it.
 
+![A supercell growing, from the warm bubble to the anvil](media/cumulo.gif)
+
+*Thirty minutes of a Weisman–Klemp supercell, rendered from the model's own
+output in the CM1 style: a grey cloud iso-surface over a reflectivity slice on
+the ground. Not a screen recording — `npm run gif` regenerates it from source.*
+
 **[Open the model → vsperr.github.io/cumulo](https://vsperr.github.io/cumulo/)**
 
 ## Why
@@ -261,6 +267,16 @@ Two headless harnesses run the physics without a browser:
 npm run sim -- 20 32 36   # 20 simulated minutes on a 32 x 32 x 36 grid
 npm run ice -- 45 28 40   # the same storm with and without the ice phase
 ```
+
+And the animation at the top is generated, not recorded:
+
+```bash
+npm run gif
+```
+
+`tools/render-gif.ts` runs the solver and ray-marches each frame on the CPU in
+the same CM1 style the browser uses, writing PNGs that ffmpeg turns into the
+gif. No screen capture, no browser, same result every time.
 
 The solver also runs headless, which is the fastest way to check a change to the
 physics:

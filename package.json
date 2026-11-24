@@ -9,7 +9,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "sim": "tsx test/run.ts",
-    "ice": "tsx test/ice.ts"
+    "ice": "tsx test/ice.ts",
+    "gif": "tsx tools/render-gif.ts && ffmpeg -y -framerate 12 -i media/frames/f%03d.png -vf \"split[a][b];[a]palettegen=max_colors=160[p];[b][p]paletteuse=dither=bayer:bayer_scale=3\" -loop 0 media/cumulo.gif"
   },
   "dependencies": {
     "three": "0.169.0",
