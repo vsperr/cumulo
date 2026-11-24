@@ -375,6 +375,10 @@ function profileFor(dev: "desktop" | "mobile"): Partial<Config> {
 
 function applyDevice(dev: "desktop" | "mobile", retune: boolean): void {
   const changed = activeDevice !== dev;
+  if (!changed && !retune) {
+    view.resize();
+    return;
+  }
   activeDevice = dev;
   document.body.dataset.device = dev;
   view.setPixelRatioCap(dev === "mobile" ? 1.25 : 2);
@@ -394,7 +398,7 @@ function applyDevice(dev: "desktop" | "mobile", retune: boolean): void {
     send({ type: "config", cfg, rebuild: true });
   }
   view.resize();
-  view.frameDomain();
+  if (changed) view.frameDomain();
 }
 
 deviceSel.value = cfg.ui.device;
@@ -420,8 +424,16 @@ setTab("view");
 // Only downgrade automatically; a shared link keeps the settings it carries.
 applyDevice(effectiveDevice(), !sharedLink && effectiveDevice() === "mobile");
 
+let resizeTimer = 0;
 window.addEventListener("resize", () => {
-  if (cfg.ui.device === "auto") applyDevice(effectiveDevice(), true);
+  clearTimeout(resizeTimer);
+  resizeTimer = window.setTimeout(() => {
+    // Follow the layout, but never re-tune the grid here: rebuilding the
+    // solver would throw away a running storm just because someone dragged
+    // the window edge. The performance profile is applied on load and when
+    // the device is chosen explicitly.
+    if (cfg.ui.device === "auto") applyDevice(effectiveDevice(), false);
+  }, 150);
 });
 
 // --- heads-up display ------------------------------------------------------
