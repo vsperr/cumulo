@@ -94,9 +94,49 @@ Kessler (1969) warm rain, in `src/core/microphysics.ts`:
   upstream with CFL substepping. The flux out of the lowest level accumulates as
   surface rainfall.
 
-There is no ice. Deep storms in the model therefore glaciate nowhere, anvils are
-liquid, and cold-pool strength is biased by the missing melting term. This is
-the main physical gap, and it is the first item on the roadmap.
+## Ice
+
+Three frozen species are carried alongside the liquid ones: cloud ice `q_i`,
+snow `q_s` and graupel `q_g`. The conversions are the standard set of a
+Lin-type single-moment scheme, each written as a relaxation with an explicit
+timescale rather than a fitted collection integral:
+
+| process | from → to | latent heat |
+| --- | --- | --- |
+| deposition / sublimation | vapour ↔ cloud ice | `L_s` |
+| freezing (complete below −40 °C) | cloud water → cloud ice | `L_f` |
+| freezing | rain → graupel | `L_f` |
+| autoconversion | cloud ice → snow | — |
+| riming | cloud water + snow, graupel | `L_f` |
+| collection | rain + snow, graupel | `L_f` |
+| melting above 0 °C | snow, graupel → rain | `L_f` |
+
+Mass-weighted terminal fall speeds, for `ρq` in kg/m³:
+
+    V_i = 3.29 (ρ q_i)^0.16      ≈ 0.8 m/s
+    V_s = 4.84 (ρ q_s)^0.25      ≈ 0.9 m/s
+    V_g = 19.3 (ρ q_g)^0.125     ≈ 8 m/s
+
+Rain is the exception and keeps Kessler's own relation, which takes the water
+content in **g/cm³**:
+
+    V_r = 36.34 (10⁻³ ρ q_r)^0.1364 √(ρ₀/ρ)   ≈ 5.5 m/s at 1 g/m³
+
+Evaporation of rain, and sublimation of snow and graupel, use the
+Ogura–Takahashi rate with its ventilation factor `1.6 + 124.9 (ρq)^0.2046`.
+
+Reflectivity sums the species, each as `Z = a (ρq)^1.75` with `a` = 3.63×10⁹
+for rain, 9.80×10⁸ for snow and 4.33×10¹⁰ for graupel, and a factor of five on
+the frozen species above 0 °C for the melting layer's bright band.
+
+### What is still missing
+
+There is one frozen precipitation category, so graupel stands in for everything
+from small hail to large and hail size cannot be read off the model. Cold pools
+come out about five times weaker than a research model's; the energy budget is
+exact, but a single-moment scheme without a hail class does not deliver the
+melting and evaporation that cools a real downdraft. There is also no
+radiation, no surface energy balance and no terrain.
 
 ## Boundaries
 

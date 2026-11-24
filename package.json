@@ -8,7 +8,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "sim": "tsx test/run.ts"
+    "sim": "tsx test/run.ts",
+    "ice": "tsx test/ice.ts"
   },
   "dependencies": {
     "three": "0.169.0",

@@ -79,6 +79,62 @@ Because radar sees rain and not cloud, a growing tower is invisible on the
 scope until it starts making raindrops — watch the 3D view and the radar side
 by side and the delay is obvious. That is not a bug in either one.
 
+## Ice
+
+The model carries three frozen species — cloud ice, snow and graupel — with
+freezing, deposition, riming, collection and melting between them, and the
+latent heat of fusion and sublimation in the energy budget. It can be switched
+off, which is the honest way to see what it is doing.
+
+Measured on the Weisman–Klemp supercell, 28 × 28 × 40, 45 minutes
+(`npm run ice`):
+
+| | warm rain | with ice |
+| --- | --- | --- |
+| anvil cover above 8 km, end of run | 9.7 % | **37.9 %** |
+| cloud top, end of run | 11.6 km | 12.4 km |
+| surface precipitation | 28 mm | 17 mm liquid + 17 mm frozen |
+| peak graupel | — | 7.8 g/kg |
+| peak reflectivity | — | 74 dBZ |
+| cost | 1.00× | 1.41× |
+
+The anvil result is the one to look at: four times the coverage, and it stays
+there instead of evaporating, because ice falls slowly and sublimates slowly.
+Graupel is what produces reflectivity above 70 dBZ — a severe core on radar is
+hail, not rain — and melting graupel gives the bright band just below the
+freezing level.
+
+### Two bugs the ice work turned up
+
+Checking the cold pool against the ice run exposed two long-standing errors in
+the warm-rain scheme, both now fixed:
+
+- **The evaporation ventilation factor was missing.** A falling drop sweeps out
+  air and evaporates far faster than a still one; the Ogura–Takahashi rate
+  carries a factor `1.6 + 124.9 (ρq)^0.2046`, worth 30 to 45×. Without it rain
+  barely evaporated at all.
+- **Rain fell 2.6× too fast.** Kessler's terminal velocity takes the rain water
+  content in g/cm³; the code was feeding it kg/m³. Drops were doing 14 m/s
+  instead of 5.5 and reached the ground before they could evaporate.
+
+Together these took the surface cold pool from −0.1 K to −0.7 K.
+
+### The cold pool is still too weak, and that is not fixed
+
+A research model running this case produces a −4 to −6 K cold pool. This one
+reaches about −0.7 K, and ice did not change that. The cause is not a coding
+error: the energy budget closes exactly (2.74 K of cooling per 1.1 g/kg
+evaporated, confirmed in a single-cell test), and neither halving the subgrid
+mixing nor doubling the resolution moves the number.
+
+What is missing is residence time and hail. Downdraft air arrives at the
+surface from 3 km with a potential temperature 5 K above the environment, and
+at the evaporation rates this scheme produces, the roughly 4 g/kg that would
+have to evaporate during the descent simply does not. Real cold pools get a
+large part of their cooling from melting and evaporating hail, which a scheme
+with one graupel category and no size distribution cannot deliver. Treat gust
+fronts and storm propagation here as qualitative.
+
 ## The CM1 look
 
 The `style` control switches between the house look and **CM1 / VisIt**: the
@@ -99,9 +155,7 @@ Two honest caveats about that last one:
   current maximum vorticity next to the iso level so you can pick a level that
   actually shows something.
 
-The anvil also looks wrong next to a real CM1 figure, and for a reason worth
-knowing: there is no ice in this model, so the anvil is liquid. Real anvils are
-ice, which is why they spread wider, live longer and light up on radar.
+The anvil is ice now, so it spreads and persists the way a real one does.
 
 ## Nothing is smoothed
 
@@ -201,6 +255,13 @@ npm install
 npm run dev
 ```
 
+Two headless harnesses run the physics without a browser:
+
+```bash
+npm run sim -- 20 32 36   # 20 simulated minutes on a 32 x 32 x 36 grid
+npm run ice -- 45 28 40   # the same storm with and without the ice phase
+```
+
 The solver also runs headless, which is the fastest way to check a change to the
 physics:
 
@@ -246,8 +307,11 @@ under Node for the headless test.
   tropospheric temperature only. Two soundings with the same CAPE but different
   shapes of the positive area behave differently, and simple mode cannot
   express that; expert mode can.
-- **No ice.** Anvils are liquid, there is no melting term, and cold pools are
-  biased because of it. This is the biggest physical gap.
+- **Cold pools are too weak**, by roughly a factor of five. See above: it is a
+  limitation of a single-moment scheme with one graupel category, not a bug.
+- **One frozen precipitation category.** Graupel stands in for everything from
+  small hail to large; there is no separate hail class and no size
+  distribution, so hail size cannot be read off the model.
 - **Uniform vertical grid.** No stretching, so resolving the boundary layer and
   the tropopause at once is expensive.
 - Momentum advection is second-order centred while scalars are third-order
@@ -257,7 +321,7 @@ under Node for the headless test.
 
 ## Roadmap
 
-- [ ] Ice microphysics (a Lin-type or simple two-moment scheme)
+- [ ] A hail category, or two-moment microphysics, for a realistic cold pool
 - [ ] Stretched vertical grid
 - [ ] GPU solver via WebGL2 transform feedback or WebGPU compute
 - [ ] Cross-section and vertical-profile panels alongside the 3D view

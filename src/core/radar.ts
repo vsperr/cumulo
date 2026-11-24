@@ -17,12 +17,33 @@
  * starts making raindrops.
  */
 
-/** Reflectivity in dBZ from air density and rain mixing ratio. */
-export function reflectivityDbz(rho: number, qr: number): number {
-  const m = rho * qr; // rain water content, kg/m^3
-  if (m <= 1e-12) return -35;
-  const z = 3.63e9 * Math.pow(m, 1.75);
-  return 10 * Math.log10(Math.max(z, 1e-4));
+/**
+ * Reflectivity in dBZ, summing the contribution of every precipitating
+ * species. Each follows the same Z = a (rho q)^1.75 form, with a set by the
+ * particle density and dielectric constant:
+ *
+ *   rain      3.63e9    liquid water, the reference
+ *   snow      9.80e8    low density and a weak dielectric: snow is quiet
+ *   graupel   4.33e10   dense ice: this is what makes a severe core
+ *
+ * Melting particles are coated in liquid water and return far more than dry
+ * ones, which is the bright band a radar sees just below the freezing level.
+ * `T` is the air temperature; pass it to get that effect.
+ */
+export function reflectivityDbz(
+  rho: number,
+  qr: number,
+  qs = 0,
+  qg = 0,
+  T = 250
+): number {
+  let z = 0;
+  if (qr > 1e-12) z += 3.63e9 * Math.pow(rho * qr, 1.75);
+  const wet = T > 273.15 ? 5 : 1; // melting coat
+  if (qs > 1e-12) z += wet * 9.8e8 * Math.pow(rho * qs, 1.75);
+  if (qg > 1e-12) z += wet * 4.33e10 * Math.pow(rho * qg, 1.75);
+  if (z <= 1e-6) return -35;
+  return 10 * Math.log10(z);
 }
 
 /** Lowest reflectivity a radar would plot; below this the scope is empty. */

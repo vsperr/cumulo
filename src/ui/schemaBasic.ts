@@ -109,6 +109,26 @@ export const SCHEMA_BASIC: Group[] = [
     ],
   },
   {
+    title: "Physics",
+    items: [
+      {
+        path: "physics.ice",
+        label: "ice phase",
+        kind: "bool",
+        hint: "Ice crystals, snow and graupel. Gives the storm an ice anvil that spreads and lasts, and hail-grade radar cores. Switch it off to see what it was doing.",
+      },
+      {
+        path: "physics.rainEvaporation",
+        label: "rain evaporation",
+        kind: "range",
+        min: 0,
+        max: 3,
+        step: 0.05,
+        hint: "How readily falling rain evaporates into dry air. This is what cools the downdraft and builds the cold pool.",
+      },
+    ],
+  },
+  {
     title: "Trigger",
     items: [
       {

@@ -519,7 +519,13 @@ function updateHud(): void {
       `elapsed     ${String(mm).padStart(3)}:${String(ss).padStart(2, "0")}`,
       `updraft     ${diag.maxW.toFixed(0)} m/s   downdraft ${gust.toFixed(0)} m/s`,
       `cloud top   ${(diag.cloudTop / 1000).toFixed(1)} km`,
-      `rain so far ${diag.maxRainAccum.toFixed(0)} mm`,
+      `rain so far ${diag.maxRainAccum.toFixed(0)} mm` +
+        (diag.maxSnowAccum > 0.05
+          ? `  (+${diag.maxSnowAccum.toFixed(0)} mm frozen)`
+          : ""),
+      ...(cfg.physics.ice && diag.maxQg > 0.01
+        ? [`hail core   ${diag.maxQg.toFixed(1)} g/kg graupel`]
+        : []),
       ...(cfg.render.showVortex
         ? [`rotation    ${maxVort.toFixed(3)} 1/s (marking ${cfg.render.vortexLevel})`]
         : []),
@@ -535,6 +541,13 @@ function updateHud(): void {
     `w         ${fmt(diag.maxW, 2)} / ${diag.minW.toFixed(2)} m/s`,
     `qc max    ${fmt(diag.maxQc, 3)} g/kg`,
     `qr max    ${fmt(diag.maxQr, 3)} g/kg`,
+    ...(cfg.physics.ice
+      ? [
+          `ice/snow  ${fmt(diag.maxQi, 3)} / ${diag.maxQs.toFixed(3)} g/kg`,
+          `graupel   ${fmt(diag.maxQg, 3)} g/kg   frozen ${diag.maxSnowAccum.toFixed(1)} mm`,
+          `0 C level ${fmt(diag.freezingLevel / 1000, 2)} km`,
+        ]
+      : []),
     `theta'    ${fmt(diag.maxThetaPert, 2)} K`,
     `cloud top ${fmt(diag.cloudTop / 1000, 2)} km`,
     `rain      ${fmt(diag.maxRainAccum, 2)} mm max`,

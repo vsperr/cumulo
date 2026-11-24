@@ -144,6 +144,8 @@ function packFrame(): { buf: ArrayBuffer; wMax: number } {
   let wMax = 1;
   for (let k = 0; k < nz; k++) {
     const rho = s.base.rho[k];
+    const thb = s.base.theta[k];
+    const pib = s.base.pi[k];
     for (let j = 0; j < ny; j++) {
       for (let i = 0; i < nx; i++) {
         const m = i + nx * (j + ny * k);
@@ -153,10 +155,16 @@ function packFrame(): { buf: ArrayBuffer; wMax: number } {
         const aw = Math.abs(w);
         if (aw > wMax) wMax = aw;
         const o = m * 4;
-        out[o] = toHalf(s.qc[m] * 1e3);
-        out[o + 1] = toHalf(s.qr[m] * 1e3);
+        // Cloud condensate (liquid + ice) and precipitation (rain + snow +
+        // graupel) share the two colour channels; the anvil is ice, so the
+        // cloud surface has to include it or it would not be there at all.
+        out[o] = toHalf((s.qc[m] + s.qi[m]) * 1e3);
+        out[o + 1] = toHalf((s.qr[m] + s.qs[m] + s.qg[m]) * 1e3);
         out[o + 2] = toHalf(w);
-        out[o + 3] = toHalf(reflectivityDbz(rho, s.qr[m]));
+        const T = (thb + s.thp[m]) * (pib + s.pip[m]);
+        out[o + 3] = toHalf(
+          reflectivityDbz(rho, s.qr[m], s.qs[m], s.qg[m], T)
+        );
       }
     }
   }
@@ -236,7 +244,15 @@ function packRadar(): RadarFrame {
       let best = -99;
       let top = 0;
       for (let k = 0; k < nz; k++) {
-        const dbz = reflectivityDbz(s.base.rho[k], s.qr[i + nx * (j + ny * k)]);
+        const m = i + nx * (j + ny * k);
+        const T = (s.base.theta[k] + s.thp[m]) * (s.base.pi[k] + s.pip[m]);
+        const dbz = reflectivityDbz(
+          s.base.rho[k],
+          s.qr[m],
+          s.qs[m],
+          s.qg[m],
+          T
+        );
         if (dbz > best) best = dbz;
         if (dbz >= 18) top = s.base.zw[k + 1];
       }
@@ -254,11 +270,17 @@ function packRadar(): RadarFrame {
   // the storm instead of sitting on an arbitrary line.
   const sectionJ = Math.floor(maxAt / nx);
   for (let k = 0; k < nz; k++)
-    for (let i = 0; i < nx; i++)
+    for (let i = 0; i < nx; i++) {
+      const m = i + nx * (sectionJ + ny * k);
+      const T = (s.base.theta[k] + s.thp[m]) * (s.base.pi[k] + s.pip[m]);
       sect[i + nx * k] = reflectivityDbz(
         s.base.rho[k],
-        s.qr[i + nx * (sectionJ + ny * k)]
+        s.qr[m],
+        s.qs[m],
+        s.qg[m],
+        T
       );
+    }
 
   return { buf, nx, ny, nz, sectionJ, maxDbz, echoTopMax };
 }

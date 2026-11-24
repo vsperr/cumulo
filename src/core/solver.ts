@@ -11,6 +11,13 @@ export interface Diagnostics {
   minW: number;
   maxQc: number; // g/kg
   maxQr: number; // g/kg
+  maxQi: number; // g/kg, cloud ice
+  maxQs: number; // g/kg, snow
+  maxQg: number; // g/kg, graupel
+  /** Height of the 0 C level in the base state [m]. */
+  freezingLevel: number;
+  /** Deepest frozen precipitation at the ground [mm water equivalent]. */
+  maxSnowAccum: number;
   maxThetaPert: number; // K
   cloudTop: number; // m
   rainRate: number; // mm/h, domain mean
@@ -51,7 +58,13 @@ export class Solver {
   qvp!: Float32Array;
   qc!: Float32Array;
   qr!: Float32Array;
+  /** Cloud ice, snow and graupel [kg/kg]; all zero when ice is switched off. */
+  qi!: Float32Array;
+  qs!: Float32Array;
+  qg!: Float32Array;
   rainAccum!: Float32Array;
+  /** Frozen precipitation reaching the ground [mm water equivalent]. */
+  snowAccum!: Float32Array;
 
   // Saved state at the start of the large step.
   private u0!: Float32Array;
@@ -62,6 +75,9 @@ export class Solver {
   private qvp0!: Float32Array;
   private qc0!: Float32Array;
   private qr0!: Float32Array;
+  private qi0!: Float32Array;
+  private qs0!: Float32Array;
+  private qg0!: Float32Array;
 
   // Slow tendencies.
   private tu!: Float32Array;
@@ -71,6 +87,9 @@ export class Solver {
   private tqvp!: Float32Array;
   private tqc!: Float32Array;
   private tqr!: Float32Array;
+  private tqi!: Float32Array;
+  private tqs!: Float32Array;
+  private tqg!: Float32Array;
 
   private km!: Float32Array;
   private pipPrev!: Float32Array;
@@ -114,7 +133,11 @@ export class Solver {
     this.qvp = mk(nc);
     this.qc = mk(nc);
     this.qr = mk(nc);
+    this.qi = mk(nc);
+    this.qs = mk(nc);
+    this.qg = mk(nc);
     this.rainAccum = mk(nx * ny);
+    this.snowAccum = mk(nx * ny);
     this.u0 = mk(nc);
     this.v0 = mk(nc);
     this.w0 = mk(nw);
@@ -123,6 +146,9 @@ export class Solver {
     this.qvp0 = mk(nc);
     this.qc0 = mk(nc);
     this.qr0 = mk(nc);
+    this.qi0 = mk(nc);
+    this.qs0 = mk(nc);
+    this.qg0 = mk(nc);
     this.tu = mk(nc);
     this.tv = mk(nc);
     this.tw = mk(nw);
@@ -130,6 +156,9 @@ export class Solver {
     this.tqvp = mk(nc);
     this.tqc = mk(nc);
     this.tqr = mk(nc);
+    this.tqi = mk(nc);
+    this.tqs = mk(nc);
+    this.tqg = mk(nc);
     this.km = mk(nc);
     this.pipPrev = mk(nc);
     this.buildIndexTables();
@@ -148,7 +177,11 @@ export class Solver {
     this.qvp.fill(0);
     this.qc.fill(0);
     this.qr.fill(0);
+    this.qi.fill(0);
+    this.qs.fill(0);
+    this.qg.fill(0);
     this.rainAccum.fill(0);
+    this.snowAccum.fill(0);
     this.time = 0;
     this.steps = 0;
     this.stable = true;
@@ -633,6 +666,15 @@ export class Solver {
     this.advectScalar(this.qvp, this.tqvp);
     this.advectScalar(this.qc, this.tqc);
     this.advectScalar(this.qr, this.tqr);
+    if (this.cfg.physics.ice) {
+      this.advectScalar(this.qi, this.tqi);
+      this.advectScalar(this.qs, this.tqs);
+      this.advectScalar(this.qg, this.tqg);
+    } else {
+      this.tqi.fill(0);
+      this.tqs.fill(0);
+      this.tqg.fill(0);
+    }
 
     for (let k = 0; k < nz; k++) {
       const kUp = Math.min(k + 1, nz - 1);
@@ -658,16 +700,23 @@ export class Solver {
         for (let i = 0; i < nx; i++) {
           const nUp = i + nx * (j + ny * k);
           const nDn = nUp - nx * ny;
+          // Every condensate species loads the air, ice included.
           const bUp =
             this.thp[nUp] / b.theta[k] +
             0.6078 * this.qvp[nUp] -
             this.qc[nUp] -
-            this.qr[nUp];
+            this.qr[nUp] -
+            this.qi[nUp] -
+            this.qs[nUp] -
+            this.qg[nUp];
           const bDn =
             this.thp[nDn] / b.theta[k - 1] +
             0.6078 * this.qvp[nDn] -
             this.qc[nDn] -
-            this.qr[nDn];
+            this.qr[nDn] -
+            this.qi[nDn] -
+            this.qs[nDn] -
+            this.qg[nDn];
           this.tw[nUp] += g * 0.5 * (bUp + bDn);
         }
       }
@@ -704,6 +753,11 @@ export class Solver {
     this.addDiffusion(this.qvp, this.tqvp, 1 / prandtl);
     this.addDiffusion(this.qc, this.tqc, 1 / prandtl);
     this.addDiffusion(this.qr, this.tqr, 1 / prandtl);
+    if (this.cfg.physics.ice) {
+      this.addDiffusion(this.qi, this.tqi, 1 / prandtl);
+      this.addDiffusion(this.qs, this.tqs, 1 / prandtl);
+      this.addDiffusion(this.qg, this.tqg, 1 / prandtl);
+    }
 
     // Surface drag.
     if (phys.surfaceDrag > 0) {
@@ -837,6 +891,9 @@ export class Solver {
     this.qvp0.set(this.qvp);
     this.qc0.set(this.qc);
     this.qr0.set(this.qr);
+    this.qi0.set(this.qi);
+    this.qs0.set(this.qs);
+    this.qg0.set(this.qg);
 
     const stageDt = [dt / 3, dt / 2, dt];
     for (let s = 0; s < 3; s++) {
@@ -850,6 +907,9 @@ export class Solver {
         this.qvp[m] = this.qvp0[m] + dts * this.tqvp[m];
         this.qc[m] = Math.max(this.qc0[m] + dts * this.tqc[m], 0);
         this.qr[m] = Math.max(this.qr0[m] + dts * this.tqr[m], 0);
+        this.qi[m] = Math.max(this.qi0[m] + dts * this.tqi[m], 0);
+        this.qs[m] = Math.max(this.qs0[m] + dts * this.tqs[m], 0);
+        this.qg[m] = Math.max(this.qg0[m] + dts * this.tqg[m], 0);
       }
     }
 
@@ -862,8 +922,12 @@ export class Solver {
         qvp: this.qvp,
         qc: this.qc,
         qr: this.qr,
+        qi: this.qi,
+        qs: this.qs,
+        qg: this.qg,
         pip: this.pip,
         rainAccum: this.rainAccum,
+        snowAccum: this.snowAccum,
       },
       this.base,
       this.cfg.physics,
@@ -882,6 +946,9 @@ export class Solver {
     let minW = 0;
     let maxQc = 0;
     let maxQr = 0;
+    let maxQi = 0;
+    let maxQs = 0;
+    let maxQg = 0;
     let maxTh = 0;
     let cloudTop = 0;
     let maxU = 0;
@@ -909,8 +976,11 @@ export class Solver {
           }
           if (qc > maxQc) maxQc = qc;
           if (qr > maxQr) maxQr = qr;
+          if (this.qi[n] > maxQi) maxQi = this.qi[n];
+          if (this.qs[n] > maxQs) maxQs = this.qs[n];
+          if (this.qg[n] > maxQg) maxQg = this.qg[n];
           if (th > maxTh) maxTh = th;
-          if (qc > 1e-5) layerCloud = true;
+          if (qc + this.qi[n] > 1e-5) layerCloud = true;
           const sp = Math.max(Math.abs(this.u[n]), Math.abs(this.v[n]));
           if (sp > maxU) maxU = sp;
         }
@@ -918,8 +988,15 @@ export class Solver {
       if (layerCloud) cloudTop = this.base.zw[k + 1];
     }
     let maxRain = 0;
-    for (let m = 0; m < this.rainAccum.length; m++)
+    let maxSnow = 0;
+    for (let m = 0; m < this.rainAccum.length; m++) {
       if (this.rainAccum[m] > maxRain) maxRain = this.rainAccum[m];
+      if (this.snowAccum[m] > maxSnow) maxSnow = this.snowAccum[m];
+    }
+    // Where the base state crosses 0 C: the level melting happens at.
+    let freezingLevel = 0;
+    for (let k = 0; k < nz; k++)
+      if (this.base.T[k] >= 273.15) freezingLevel = this.base.z[k];
 
     if (bad || maxW > 300 || maxTh > 100) this.stable = false;
 
@@ -934,6 +1011,11 @@ export class Solver {
       minW,
       maxQc: maxQc * 1e3,
       maxQr: maxQr * 1e3,
+      maxQi: maxQi * 1e3,
+      maxQs: maxQs * 1e3,
+      maxQg: maxQg * 1e3,
+      freezingLevel,
+      maxSnowAccum: maxSnow,
       maxThetaPert: maxTh,
       cloudTop,
       rainRate: this.lastRainRate,
@@ -960,10 +1042,14 @@ export class Solver {
       return;
     }
     for (let m = 0; m < n; m++) {
-      const qc = this.qc[m];
-      const qr = this.qr[m];
+      const cloud = this.qc[m] + this.qi[m];
+      const precip = this.qr[m] + this.qs[m] + this.qg[m];
       out[m] =
-        field === "cloud" ? qc * 1e3 : field === "rain" ? qr * 1e3 : (qc + qr) * 1e3;
+        field === "cloud"
+          ? cloud * 1e3
+          : field === "rain"
+          ? precip * 1e3
+          : (cloud + precip) * 1e3;
     }
   }
 }

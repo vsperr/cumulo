@@ -100,6 +100,25 @@ export interface NumericsConfig {
 
 export interface PhysicsConfig {
   microphysics: boolean;
+  /**
+   * Ice phase: cloud ice, snow and graupel, with freezing, deposition,
+   * riming and melting. Switching it off leaves the warm-rain scheme alone,
+   * which is the honest way to see what the ice is doing.
+   */
+  ice: boolean;
+  /** e-folding time for cloud water freezing at -40 C [s]. */
+  freezeTime: number;
+  /** Cloud ice above this becomes snow [kg/kg]. */
+  iceToSnowThreshold: number;
+  /** Timescale of that conversion [s]. */
+  iceToSnowTime: number;
+  /** Collection efficiency scale for riming and frozen collection. */
+  rimingRate: number;
+  /** e-folding time for melting snow [s]; graupel melts 1.7x slower. */
+  meltTime: number;
+  iceFallSpeed: number;
+  snowFallSpeed: number;
+  graupelFallSpeed: number;
   autoconversionThreshold: number; // kg/kg, qc above which rain forms
   autoconversionRate: number; // 1/s
   accretionRate: number; // 1/s
@@ -192,6 +211,15 @@ export function defaultConfig(): Config {
     },
     physics: {
       microphysics: true,
+      ice: true,
+      freezeTime: 60,
+      iceToSnowThreshold: 1.0e-4,
+      iceToSnowTime: 200,
+      rimingRate: 2.0,
+      meltTime: 60,
+      iceFallSpeed: 1,
+      snowFallSpeed: 1,
+      graupelFallSpeed: 1,
       autoconversionThreshold: 1.0e-3,
       autoconversionRate: 1.0e-3,
       accretionRate: 2.2,
