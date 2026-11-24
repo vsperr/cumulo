@@ -8,6 +8,7 @@ const FIELD_INDEX: Record<RenderConfig["field"], number> = {
   rain: 1,
   total: 2,
   updraft: 3,
+  reflectivity: 4,
 };
 const MODE_INDEX: Record<RenderConfig["mode"], number> = {
   volume: 0,
@@ -174,8 +175,8 @@ export class SceneView {
       const tex = new THREE.Data3DTexture(data, nx, ny, nz);
       tex.format = THREE.RGBAFormat;
       tex.type = THREE.HalfFloatType;
-      tex.minFilter = THREE.LinearFilter;
-      tex.magFilter = THREE.LinearFilter;
+      tex.minFilter = THREE.NearestFilter;
+      tex.magFilter = THREE.NearestFilter;
       tex.wrapS = THREE.ClampToEdgeWrapping;
       tex.wrapT = THREE.ClampToEdgeWrapping;
       tex.wrapR = THREE.ClampToEdgeWrapping;
@@ -201,6 +202,20 @@ export class SceneView {
   }
 
   /**
+   * Interpolate between cells, or show them as they are. Linear filtering
+   * invents values between grid points, which looks soft but is not what the
+   * model computed; nearest shows exactly the cells the solver advanced.
+   */
+  setSmoothing(smooth: boolean): void {
+    if (!this.texture) return;
+    const f = smooth ? THREE.LinearFilter : THREE.NearestFilter;
+    if (this.texture.minFilter === f) return;
+    this.texture.minFilter = f;
+    this.texture.magFilter = f;
+    this.texture.needsUpdate = true;
+  }
+
+  /**
    * Upload a frame: interleaved RGBA half floats = cloud [g/kg], rain [g/kg],
    * w [m/s].
    */
@@ -221,6 +236,8 @@ export class SceneView {
     u.uDensity.value = r.density;
     u.uSteps.value = Math.min(Math.max(r.steps, 16), 512);
     u.uShowUpdraft.value = r.showUpdraft ? 1 : 0;
+    u.uContourStep.value = Math.max(r.contourStep, 0);
+    this.setSmoothing(r.smooth);
     this.material.transparent = r.mode === "volume";
     this.material.depthWrite = r.mode !== "volume";
     this.boxEdges.visible = r.showBox;

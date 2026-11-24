@@ -114,7 +114,15 @@ export interface PhysicsConfig {
 
 export interface RenderConfig {
   mode: "volume" | "surface" | "wire";
-  field: "cloud" | "rain" | "total" | "updraft";
+  field: "cloud" | "rain" | "total" | "updraft" | "reflectivity";
+  /**
+   * Interpolate between grid cells. Off by default: linear filtering invents
+   * values the solver never computed, which reads as a soft blur over what is
+   * really a 48-cell grid. Off shows the model's own cells.
+   */
+  smooth: boolean;
+  /** Contour band width in g/kg; 0 leaves the field continuous. */
+  contourStep: number;
   threshold: number; // g/kg, iso level for surface/wire modes
   density: number; // extinction scaling for volume mode
   steps: number; // raymarch samples
@@ -215,9 +223,11 @@ export function defaultConfig(): Config {
       noise: 0.1,
     },
     render: {
-      mode: "volume",
+      mode: "surface",
       field: "total",
-      threshold: 0.05,
+      smooth: false,
+      contourStep: 0.2,
+      threshold: 0.02,
       density: 1,
       steps: 160,
       sunAzimuth: 135,

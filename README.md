@@ -58,6 +58,41 @@ the analytic profile, every numerical setting and each microphysics rate. The
 simple numbers and the expert ones are the same configuration object, so you
 can set CAPE by hand and then go look at what it did to the profile.
 
+## Radar
+
+There is a radar scope in the corner of the view — what a weather radar would
+actually see of the storm you are running. For the exponential drop-size
+distribution the Kessler scheme assumes, reflectivity follows the rain water
+content directly:
+
+    Z = 3.63e9 (rho q_r)^1.75   [mm^6/m^3],   dBZ = 10 log10 Z
+
+the same diagnostic CM1 and WRF use. It puts 0.1 g/m³ of rain near 26 dBZ,
+1 g/m³ near 43 and 5 g/m³ near 55 — the numbers you read off a real scope.
+
+Two products: **composite reflectivity**, the column maximum in plan view with
+range rings every 10 km, and a **vertical section** cut through the strongest
+echo, like an RHI scan, with echo top at the 18 dBZ threshold. Reflectivity is
+also available as a 3D field, in the same colour table.
+
+Because radar sees rain and not cloud, a growing tower is invisible on the
+scope until it starts making raindrops — watch the 3D view and the radar side
+by side and the delay is obvious. That is not a bug in either one.
+
+## Nothing is smoothed
+
+Interpolation between grid cells is **off by default**, in the 3D view and on
+the radar scope alike. Linear filtering invents values the solver never
+computed: it looks soft and pretty, and it quietly implies a resolution the
+model does not have. With it off you see the cells the solver actually
+advanced, with hard edges — a 48-cell domain looks like a 48-cell domain.
+
+The `smooth between cells` toggle turns it back on if you prefer the look, and
+`contour bands` snaps the field to discrete levels the way a scientific contour
+plot does. The radar scope is never smoothed: a radar product is a grid of
+discrete gates in banded colours, and blurring one is a lie about the
+resolution.
+
 ## Real soundings
 
 There is a world map in the right-hand column. Click a point, pick a forecast

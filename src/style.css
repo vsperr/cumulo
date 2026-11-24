@@ -297,3 +297,68 @@ body[data-device="mobile"] canvas#sounding { height: 440px; }
 body[data-device="mobile"] .hud { font-size: 10.5px; padding: 6px 8px; }
 body[data-device="mobile"] .legend { display: none; }
 body[data-device="mobile"] .indices { font-size: 11px; }
+
+/* --- radar scope ----------------------------------------------------------
+   An inset on the desktop, a whole tab on a phone. Nothing in it is smoothed:
+   a radar product is a grid of discrete gates in banded colours.
+   ------------------------------------------------------------------------- */
+
+.radar {
+  position: absolute;
+  right: 12px;
+  bottom: 26px;
+  width: 288px;
+  background: rgba(6, 9, 13, 0.93);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  z-index: 2;
+}
+.radarhead {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 6px 5px 9px;
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+}
+.radarhead strong { flex: 1; font-weight: 600; font-size: 11px; color: #c7d3e4; }
+.radarhead button {
+  padding: 3px 7px;
+  font-size: 10.5px;
+  border-radius: 5px;
+  background: #0d131c;
+}
+.radarhead button.on { background: #1d4a77; border-color: #2b6294; color: #fff; }
+#radarpanel canvas { width: 100%; height: 286px; display: block; }
+#rcaption {
+  margin: 0;
+  padding: 5px 9px 7px;
+  font-size: 10.5px;
+  color: var(--dim);
+  border-top: 1px solid var(--line);
+}
+.radarshow {
+  position: absolute;
+  right: 12px;
+  bottom: 26px;
+  z-index: 2;
+}
+
+body[data-device="mobile"] .radar {
+  display: none;
+  inset: 0;
+  width: auto;
+  border: none;
+  border-radius: 0;
+  background: var(--bg);
+}
+body[data-device="mobile"][data-tab="radar"] .radar { display: block; }
+body[data-device="mobile"][data-tab="radar"] #radarpanel canvas {
+  height: calc(100% - 64px);
+}
+body[data-device="mobile"] .radarshow { display: none; }
+body[data-device="mobile"] .radarhead { padding: 10px 10px 10px 12px; }
+body[data-device="mobile"] .radarhead button { padding: 7px 12px; font-size: 12px; }
+body[data-device="mobile"] #rhide { display: none; }
+body[data-device="mobile"] #rcaption { font-size: 12px; padding: 8px 12px; }

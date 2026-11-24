@@ -7,6 +7,7 @@ import { SCHEMA } from "./ui/schema";
 import { SCHEMA_BASIC } from "./ui/schemaBasic";
 import { PRESETS, configFromPreset } from "./ui/presets";
 import { SoundingPlot } from "./ui/soundingPlot";
+import { RadarScope } from "./ui/radarScope";
 import { WorldMap, type MapPoint } from "./ui/worldMap";
 import {
   MODELS,
@@ -54,6 +55,25 @@ view.setGrid(cfg.grid, cfg.render.exaggerateZ);
 view.applyRenderConfig(cfg.render);
 
 const plot = new SoundingPlot($<HTMLCanvasElement>("sounding"));
+const scope = new RadarScope($<HTMLCanvasElement>("scope"));
+
+// --- radar scope controls --------------------------------------------------
+function setScopeMode(m: "plan" | "section"): void {
+  scope.setMode(m);
+  $("rplan").classList.toggle("on", m === "plan");
+  $("rsect").classList.toggle("on", m === "section");
+}
+$("rplan").addEventListener("click", () => setScopeMode("plan"));
+$("rsect").addEventListener("click", () => setScopeMode("section"));
+$("rhide").addEventListener("click", () => {
+  $("radarpanel").style.display = "none";
+  $("rshow").hidden = false;
+});
+$("rshow").addEventListener("click", () => {
+  $("radarpanel").style.display = "";
+  $("rshow").hidden = true;
+  scope.draw();
+});
 
 const worker = new SimWorker();
 const send = (m: ToWorker, transfer?: Transferable[]) =>
@@ -141,6 +161,27 @@ worker.onmessage = (ev: MessageEvent<FromWorker>) => {
     const data = new Uint16Array(m.buf);
     view.updateField(data, Math.max(Math.abs(m.diag.maxW), Math.abs(m.diag.minW)));
     send({ type: "recycle", buf: m.buf }, [m.buf]);
+
+    // Radar products: copied out before the buffer goes back to the worker.
+    const r = m.radar;
+    const nxy = r.nx * r.ny;
+    const all = new Float32Array(r.buf);
+    scope.setFrame({
+      nx: r.nx,
+      ny: r.ny,
+      nz: r.nz,
+      dx: cfg.grid.dx,
+      dy: cfg.grid.dy,
+      dz: cfg.grid.dz,
+      sectionJ: r.sectionJ,
+      maxDbz: r.maxDbz,
+      echoTopMax: r.echoTopMax,
+      composite: all.slice(0, nxy),
+      tops: all.slice(nxy, 2 * nxy),
+      section: all.slice(2 * nxy),
+    });
+    $("rcaption").textContent = scope.caption();
+    send({ type: "recycleRadar", buf: r.buf }, [r.buf]);
     updateHud();
     if (!m.diag.stable) {
       running = false;

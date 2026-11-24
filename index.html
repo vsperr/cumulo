@@ -52,6 +52,17 @@
       <section class="view">
         <canvas id="gl"></canvas>
         <div id="hud" class="hud"></div>
+        <section id="radarpanel" class="radar">
+          <div class="radarhead">
+            <strong>Radar</strong>
+            <button id="rplan" class="on">composite</button>
+            <button id="rsect">section</button>
+            <button id="rhide" title="Hide the scope">×</button>
+          </div>
+          <canvas id="scope"></canvas>
+          <p id="rcaption"></p>
+        </section>
+        <button id="rshow" class="radarshow" hidden>Radar</button>
         <div id="warn" class="warn" hidden></div>
         <div class="legend">
           drag to orbit · scroll to zoom · the view has no textures: the cloud is
@@ -120,7 +131,8 @@
     <nav class="tabs" id="tabs">
       <button data-tab="view">Storm</button>
       <button data-tab="setup">Settings</button>
-      <button data-tab="air">Atmosphere</button>
+      <button data-tab="radar">Radar</button>
+      <button data-tab="air">Air</button>
     </nav>
 
     <script type="module" src="/src/main.ts"></script>

@@ -106,7 +106,9 @@ export const SCHEMA: Group[] = [
     open: true,
     items: [
       { path: "render.mode", label: "shading", kind: "select", options: [["volume", "volumetric"], ["surface", "iso-surface"], ["wire", "iso-surface + cells"]] },
-      { path: "render.field", label: "field", kind: "select", options: [["total", "cloud + rain"], ["cloud", "cloud water"], ["rain", "rain water"], ["updraft", "vertical velocity"]] },
+      { path: "render.field", label: "field", kind: "select", options: [["total", "cloud + rain"], ["cloud", "cloud water"], ["rain", "rain water"], ["updraft", "vertical velocity"], ["reflectivity", "radar reflectivity"]] },
+      { path: "render.smooth", label: "interpolate cells", kind: "bool", hint: "Off shows the model's own grid cells. On invents values between them: smoother, but not what was computed." },
+      { path: "render.contourStep", label: "contour band", kind: "range", min: 0, max: 1, step: 0.05, unit: "g/kg", hint: "Snap the field to bands, the way a contour plot does. 0 is continuous." },
       { path: "render.threshold", label: "iso level", kind: "range", min: 0.001, max: 3, step: 0.001, unit: "g/kg" },
       { path: "render.density", label: "opacity", kind: "range", min: 0.05, max: 5, step: 0.05 },
       { path: "render.steps", label: "raymarch samples", kind: "number", min: 24, max: 512, step: 8 },

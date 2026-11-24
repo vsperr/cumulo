@@ -3,6 +3,7 @@ import { Solver, type Diagnostics } from "../core/solver";
 import { parcelAscent, bulkShear, srh, dewpoint } from "../core/thermo";
 import { baseStateToLevels, toInputSounding } from "../core/sounding";
 import { toHalf } from "../core/half";
+import { reflectivityDbz } from "../core/radar";
 import type { Config, SoundingLevel } from "../core/config";
 
 /** Base-state summary shipped to the UI for the sounding diagram. */
@@ -38,13 +39,29 @@ export type ToWorker =
   | { type: "run"; running: boolean }
   | { type: "reset" }
   | { type: "steps"; n: number }
-  | { type: "recycle"; buf: ArrayBuffer };
+  | { type: "recycle"; buf: ArrayBuffer }
+  | { type: "recycleRadar"; buf: ArrayBuffer };
+
+/** Radar products, computed from the rain field at full precision. */
+export interface RadarFrame {
+  /** Float32: composite dBZ (nx*ny), echo top in m (nx*ny), section (nx*nz). */
+  buf: ArrayBuffer;
+  nx: number;
+  ny: number;
+  nz: number;
+  /** Row the vertical section was cut through: the one holding the strongest echo. */
+  sectionJ: number;
+  maxDbz: number;
+  /** Height of the highest 18 dBZ echo anywhere in the domain [m]. */
+  echoTopMax: number;
+}
 
 export type FromWorker =
   | { type: "base"; base: BaseStateMessage }
   | {
       type: "frame";
       buf: ArrayBuffer;
+      radar: RadarFrame;
       diag: Diagnostics;
       msPerStep: number;
     }
@@ -109,8 +126,9 @@ function describeBase(): void {
 }
 
 /**
- * Pack the frame the renderer needs: cloud [g/kg], rain [g/kg], w [m/s], as
- * half floats so the GPU will filter the volume smoothly.
+ * Pack the frame the renderer needs: cloud [g/kg], rain [g/kg], w [m/s] and
+ * radar reflectivity [dBZ], as half floats. Reflectivity is computed here
+ * rather than in the shader because it needs the air density profile.
  */
 function packFrame(): { buf: ArrayBuffer; wMax: number } {
   const s = solver!;
@@ -121,6 +139,7 @@ function packFrame(): { buf: ArrayBuffer; wMax: number } {
   const out = new Uint16Array(buf);
   let wMax = 1;
   for (let k = 0; k < nz; k++) {
+    const rho = s.base.rho[k];
     for (let j = 0; j < ny; j++) {
       for (let i = 0; i < nx; i++) {
         const m = i + nx * (j + ny * k);
@@ -133,18 +152,77 @@ function packFrame(): { buf: ArrayBuffer; wMax: number } {
         out[o] = toHalf(s.qc[m] * 1e3);
         out[o + 1] = toHalf(s.qr[m] * 1e3);
         out[o + 2] = toHalf(w);
-        out[o + 3] = 0;
+        out[o + 3] = toHalf(reflectivityDbz(rho, s.qr[m]));
       }
     }
   }
   return { buf, wMax };
 }
 
+const radarSpare: ArrayBuffer[] = [];
+
+/**
+ * Build the radar products: column-maximum reflectivity (what a radar's
+ * composite product shows), echo top (the highest 18 dBZ return, the standard
+ * threshold), and a vertical section cut through the strongest echo.
+ */
+function packRadar(): RadarFrame {
+  const s = solver!;
+  const { nx, ny, nz } = s;
+  const nxy = nx * ny;
+  const need = (2 * nxy + nx * nz) * 4;
+  let buf = radarSpare.pop();
+  if (!buf || buf.byteLength !== need) buf = new ArrayBuffer(need);
+  const out = new Float32Array(buf);
+  out.fill(0);
+
+  const comp = out.subarray(0, nxy);
+  const tops = out.subarray(nxy, 2 * nxy);
+  const sect = out.subarray(2 * nxy);
+
+  let maxDbz = -99;
+  let maxAt = 0;
+  let echoTopMax = 0;
+
+  for (let j = 0; j < ny; j++) {
+    for (let i = 0; i < nx; i++) {
+      const c = i + nx * j;
+      let best = -99;
+      let top = 0;
+      for (let k = 0; k < nz; k++) {
+        const dbz = reflectivityDbz(s.base.rho[k], s.qr[i + nx * (j + ny * k)]);
+        if (dbz > best) best = dbz;
+        if (dbz >= 18) top = s.base.zw[k + 1];
+      }
+      comp[c] = best;
+      tops[c] = top;
+      if (top > echoTopMax) echoTopMax = top;
+      if (best > maxDbz) {
+        maxDbz = best;
+        maxAt = c;
+      }
+    }
+  }
+
+  // Cut the section through the row with the strongest echo, so it follows
+  // the storm instead of sitting on an arbitrary line.
+  const sectionJ = Math.floor(maxAt / nx);
+  for (let k = 0; k < nz; k++)
+    for (let i = 0; i < nx; i++)
+      sect[i + nx * k] = reflectivityDbz(
+        s.base.rho[k],
+        s.qr[i + nx * (sectionJ + ny * k)]
+      );
+
+  return { buf, nx, ny, nz, sectionJ, maxDbz, echoTopMax };
+}
+
 function emit(): void {
   if (!solver) return;
   const { buf } = packFrame();
+  const radar = packRadar();
   const diag = solver.diagnostics();
-  post({ type: "frame", buf, diag, msPerStep }, [buf]);
+  post({ type: "frame", buf, radar, diag, msPerStep }, [buf, radar.buf]);
 }
 
 function tick(): void {
@@ -202,6 +280,9 @@ self.onmessage = (ev: MessageEvent<ToWorker>) => {
         break;
       case "recycle":
         if (spare.length < 3) spare.push(m.buf);
+        break;
+      case "recycleRadar":
+        if (radarSpare.length < 3) radarSpare.push(m.buf);
         break;
     }
   } catch (err) {

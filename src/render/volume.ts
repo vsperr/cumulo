@@ -33,6 +33,8 @@ uniform int uFieldSel;    // 0 cloud, 1 rain, 2 total, 3 updraft
 uniform float uShowUpdraft;
 uniform vec3 uGridCells;
 uniform float uWMax;
+/** Width of a contour band in g/kg; 0 leaves the field continuous. */
+uniform float uContourStep;
 
 const vec3 CLOUD_BRIGHT = vec3(1.00, 0.99, 0.97);
 const vec3 CLOUD_SHADE  = vec3(0.34, 0.39, 0.50);
@@ -51,13 +53,40 @@ vec4 sampleField(vec3 p) {
   return texture(uField, toTex(p));
 }
 
-// Water content [g/kg] at a point, according to the selected field.
+// The standard weather-radar colour table, as steps rather than a gradient.
+vec3 radarColor(float dbz) {
+  if (dbz < 10.0) return vec3(0.016, 0.914, 0.906);
+  if (dbz < 15.0) return vec3(0.004, 0.624, 0.957);
+  if (dbz < 20.0) return vec3(0.012, 0.000, 0.957);
+  if (dbz < 25.0) return vec3(0.008, 0.992, 0.008);
+  if (dbz < 30.0) return vec3(0.004, 0.773, 0.004);
+  if (dbz < 35.0) return vec3(0.000, 0.557, 0.000);
+  if (dbz < 40.0) return vec3(0.992, 0.973, 0.008);
+  if (dbz < 45.0) return vec3(0.898, 0.737, 0.000);
+  if (dbz < 50.0) return vec3(0.992, 0.584, 0.000);
+  if (dbz < 55.0) return vec3(0.992, 0.000, 0.000);
+  if (dbz < 60.0) return vec3(0.831, 0.000, 0.000);
+  if (dbz < 65.0) return vec3(0.737, 0.000, 0.000);
+  if (dbz < 70.0) return vec3(0.973, 0.000, 0.992);
+  if (dbz < 75.0) return vec3(0.596, 0.329, 0.776);
+  return vec3(1.0);
+}
+
+// Value of the selected field at a sample, in g/kg or an equivalent magnitude.
+float fieldOf(vec4 s) {
+  float q;
+  if (uFieldSel == 0) q = s.r;
+  else if (uFieldSel == 1) q = s.g;
+  else if (uFieldSel == 3) q = abs(s.b);
+  else if (uFieldSel == 4) q = max(s.a - 5.0, 0.0) * 0.12; // dBZ, rescaled
+  else q = s.r + s.g;
+  // Snap to contour bands: the model's own levels, not an invented gradient.
+  if (uContourStep > 0.0) q = floor(q / uContourStep) * uContourStep;
+  return q;
+}
+
 float waterAt(vec3 p) {
-  vec4 s = sampleField(p);
-  if (uFieldSel == 0) return s.r;
-  if (uFieldSel == 1) return s.g;
-  if (uFieldSel == 3) return abs(s.b);
-  return s.r + s.g;
+  return fieldOf(sampleField(p));
 }
 
 // Cheap per-pixel hash, used to offset where each ray starts sampling.
@@ -126,8 +155,7 @@ void main() {
       float t = t0 + (float(i) + jitter) * dt;
       vec3 p = ro + rd * t;
       vec4 s = sampleField(p);
-      float q = (uFieldSel == 0) ? s.r : (uFieldSel == 1) ? s.g
-              : (uFieldSel == 3) ? abs(s.b) : (s.r + s.g);
+      float q = fieldOf(s);
       if (q < 1.0e-3) continue;
 
       float sigma = q * uDensity * 3.0;
@@ -136,9 +164,13 @@ void main() {
       float tau = sunDepth(p, sunStep) * uDensity * 3.0 * 12.0;
       float light = exp(-tau);
       float rainFrac = (s.r + s.g > 1.0e-6) ? s.g / (s.r + s.g) : 0.0;
-      vec3 albedo = mix(CLOUD_BRIGHT, RAIN_TINT, rainFrac);
-      vec3 col = albedo * (SKY_AMBIENT * 0.42 + vec3(1.0, 0.96, 0.88) * light);
-      col = mix(CLOUD_SHADE * albedo, col, 0.18 + 0.82 * light);
+      vec3 albedo = (uFieldSel == 4)
+        ? radarColor(s.a)
+        : mix(CLOUD_BRIGHT, RAIN_TINT, rainFrac);
+      vec3 col = (uFieldSel == 4)
+        ? albedo * (0.55 + 0.45 * light)
+        : albedo * (SKY_AMBIENT * 0.42 + vec3(1.0, 0.96, 0.88) * light);
+      if (uFieldSel != 4) col = mix(CLOUD_SHADE * albedo, col, 0.18 + 0.82 * light);
 
       if (uShowUpdraft > 0.5) {
         float wn = clamp(s.b / uWMax, -1.0, 1.0);
@@ -172,7 +204,9 @@ void main() {
       float sky = 0.5 + 0.5 * n.y;
       vec4 s = sampleField(p);
       float rainFrac = (s.r + s.g > 1.0e-6) ? s.g / (s.r + s.g) : 0.0;
-      vec3 albedo = mix(CLOUD_BRIGHT, RAIN_TINT, rainFrac);
+      vec3 albedo = (uFieldSel == 4)
+        ? radarColor(s.a)
+        : mix(CLOUD_BRIGHT, RAIN_TINT, rainFrac);
       vec3 col = albedo * (0.22 * SKY_AMBIENT * sky + 0.95 * diff) +
                  CLOUD_SHADE * 0.25;
       float rim = pow(1.0 - abs(dot(n, -rd)), 3.0);
@@ -213,6 +247,7 @@ export interface VolumeUniforms {
   uShowUpdraft: { value: number };
   uGridCells: { value: THREE.Vector3 };
   uWMax: { value: number };
+  uContourStep: { value: number };
 }
 
 export function createVolumeMaterial(): THREE.ShaderMaterial {
@@ -228,6 +263,7 @@ export function createVolumeMaterial(): THREE.ShaderMaterial {
     uShowUpdraft: { value: 1 },
     uGridCells: { value: new THREE.Vector3(48, 48, 40) },
     uWMax: { value: 20 },
+    uContourStep: { value: 0 },
   };
   return new THREE.ShaderMaterial({
     uniforms: uniforms as unknown as Record<string, THREE.IUniform>,
