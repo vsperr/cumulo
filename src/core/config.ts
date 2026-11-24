@@ -113,6 +113,8 @@ export interface PhysicsConfig {
 }
 
 export interface RenderConfig {
+  /** A bundle of the settings below: the house look, or the CM1/VisIt one. */
+  look: "cumulo" | "cm1";
   mode: "volume" | "surface" | "wire";
   field: "cloud" | "rain" | "total" | "updraft" | "reflectivity";
   /**
@@ -132,6 +134,22 @@ export interface RenderConfig {
   showGround: boolean;
   showUpdraft: boolean;
   exaggerateZ: number; // vertical stretch of the rendered box
+
+  /** --- the CM1 / VisIt look --- */
+  /** Daylight sky instead of the dark studio background. */
+  sky: "dark" | "day";
+  /** Shade the cloud as matte grey, the way VisIt draws a bare iso-surface. */
+  cloudGrey: boolean;
+  /** Lay a reflectivity slice over the ground, under the storm. */
+  groundRadar: boolean;
+  /** Model level the ground slice is taken from. */
+  groundLevel: number;
+  /** Colour table: operational banded, or the continuous CM1 rainbow. */
+  palette: "nws" | "cm1";
+  /** Draw an iso-surface of vertical vorticity, marking the mesocyclone. */
+  showVortex: boolean;
+  /** Vorticity iso level [1/s]. */
+  vortexLevel: number;
 }
 
 export type DeviceMode = "auto" | "desktop" | "mobile";
@@ -223,6 +241,7 @@ export function defaultConfig(): Config {
       noise: 0.1,
     },
     render: {
+      look: "cumulo",
       mode: "surface",
       field: "total",
       smooth: false,
@@ -236,6 +255,13 @@ export function defaultConfig(): Config {
       showGround: true,
       showUpdraft: true,
       exaggerateZ: 1,
+      sky: "dark",
+      cloudGrey: false,
+      groundRadar: false,
+      groundLevel: 0,
+      palette: "nws",
+      showVortex: false,
+      vortexLevel: 0.012,
     },
   };
 }

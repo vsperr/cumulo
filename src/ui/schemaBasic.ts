@@ -186,8 +186,19 @@ export const SCHEMA_BASIC: Group[] = [
     open: true,
     items: [
       {
+        path: "render.look",
+        label: "style",
+        kind: "select",
+        rebuild: false,
+        options: [
+          ["cumulo", "cumulo"],
+          ["cm1", "CM1 / VisIt"],
+        ],
+        hint: "CM1 style: bare grey cloud iso-surface, daylight sky, a reflectivity slice on the ground and the mesocyclone marked — the way published CM1 figures look.",
+      },
+      {
         path: "render.mode",
-        label: "look",
+        label: "shading",
         kind: "select",
         options: [
           ["volume", "soft cloud"],

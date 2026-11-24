@@ -105,6 +105,7 @@ export const SCHEMA: Group[] = [
     title: "View",
     open: true,
     items: [
+      { path: "render.look", label: "style", kind: "select", options: [["cumulo", "cumulo"], ["cm1", "CM1 / VisIt"]], hint: "A bundle of the settings below." },
       { path: "render.mode", label: "shading", kind: "select", options: [["volume", "volumetric"], ["surface", "iso-surface"], ["wire", "iso-surface + cells"]] },
       { path: "render.field", label: "field", kind: "select", options: [["total", "cloud + rain"], ["cloud", "cloud water"], ["rain", "rain water"], ["updraft", "vertical velocity"], ["reflectivity", "radar reflectivity"]] },
       { path: "render.smooth", label: "interpolate cells", kind: "bool", hint: "Off shows the model's own grid cells. On invents values between them: smoother, but not what was computed." },
@@ -118,6 +119,13 @@ export const SCHEMA: Group[] = [
       { path: "render.showBox", label: "domain box", kind: "bool" },
       { path: "render.showGround", label: "ground grid", kind: "bool" },
       { path: "render.exaggerateZ", label: "vertical stretch", kind: "range", min: 0.25, max: 3, step: 0.05 },
+      { path: "render.sky", label: "sky", kind: "select", options: [["dark", "dark studio"], ["day", "daylight"]] },
+      { path: "render.cloudGrey", label: "bare grey cloud", kind: "bool", hint: "Shade the iso-surface as plain matte grey, with no material of its own." },
+      { path: "render.groundRadar", label: "reflectivity on the ground", kind: "bool" },
+      { path: "render.groundLevel", label: "slice level", kind: "number", min: 0, max: 60, step: 1, hint: "Model level the ground slice is taken from." },
+      { path: "render.palette", label: "colour table", kind: "select", options: [["nws", "operational, banded"], ["cm1", "CM1 rainbow"]] },
+      { path: "render.showVortex", label: "mark the vortex", kind: "bool", hint: "Iso-surface of vertical vorticity: the mesocyclone, and any tornado-like vortex the grid can resolve." },
+      { path: "render.vortexLevel", label: "vorticity level", kind: "range", min: 0.002, max: 0.2, step: 0.002, unit: "1/s" },
     ],
   },
 ];

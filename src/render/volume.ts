@@ -23,6 +23,7 @@ in vec3 vLocal;
 out vec4 outColor;
 
 uniform sampler3D uField;
+uniform sampler3D uVort;
 uniform vec3 uCamLocal;
 uniform vec3 uSun;
 uniform float uDensity;
@@ -35,6 +36,10 @@ uniform vec3 uGridCells;
 uniform float uWMax;
 /** Width of a contour band in g/kg; 0 leaves the field continuous. */
 uniform float uContourStep;
+uniform float uCloudGrey;   // shade the cloud as bare matte grey
+uniform float uPalette;     // 0 = banded operational, 1 = continuous CM1 rainbow
+uniform float uShowVortex;
+uniform float uVortLevel;
 
 const vec3 CLOUD_BRIGHT = vec3(1.00, 0.99, 0.97);
 const vec3 CLOUD_SHADE  = vec3(0.34, 0.39, 0.50);
@@ -70,6 +75,28 @@ vec3 radarColor(float dbz) {
   if (dbz < 70.0) return vec3(0.973, 0.000, 0.992);
   if (dbz < 75.0) return vec3(0.596, 0.329, 0.776);
   return vec3(1.0);
+}
+
+// The continuous rainbow CM1 reflectivity is conventionally plotted with.
+vec3 cm1Color(float d) {
+  if (d <= -10.0) return vec3(0.000, 0.000, 0.549);
+  if (d <   0.0) return mix(vec3(0.000,0.000,0.549), vec3(0.000,0.451,1.000), (d+10.0)*0.1);
+  if (d <  10.0) return mix(vec3(0.000,0.451,1.000), vec3(0.000,0.902,0.949), d*0.1);
+  if (d <  20.0) return mix(vec3(0.000,0.902,0.949), vec3(0.102,0.851,0.200), (d-10.0)*0.1);
+  if (d <  30.0) return mix(vec3(0.102,0.851,0.200), vec3(0.549,0.949,0.102), (d-20.0)*0.1);
+  if (d <  40.0) return mix(vec3(0.549,0.949,0.102), vec3(1.000,0.949,0.000), (d-30.0)*0.1);
+  if (d <  50.0) return mix(vec3(1.000,0.949,0.000), vec3(1.000,0.451,0.000), (d-40.0)*0.1);
+  if (d <  60.0) return mix(vec3(1.000,0.451,0.000), vec3(0.949,0.000,0.000), (d-50.0)*0.1);
+  if (d <  70.0) return mix(vec3(0.949,0.000,0.000), vec3(0.851,0.000,0.749), (d-60.0)*0.1);
+  return mix(vec3(0.851,0.000,0.749), vec3(1.000,0.749,0.949), clamp((d-70.0)*0.1,0.0,1.0));
+}
+
+vec3 dbzColor(float d) {
+  return uPalette > 0.5 ? cm1Color(d) : radarColor(d);
+}
+
+float vortAt(vec3 p) {
+  return texture(uVort, toTex(p)).r;
 }
 
 // Value of the selected field at a sample, in g/kg or an equivalent magnitude.
@@ -154,6 +181,15 @@ void main() {
       if (i >= uSteps || trans < 0.004) break;
       float t = t0 + (float(i) + jitter) * dt;
       vec3 p = ro + rd * t;
+      if (uShowVortex > 0.5) {
+        float z = vortAt(p);
+        if (abs(z) >= uVortLevel) {
+          vec3 vc = z > 0.0 ? vec3(0.76, 0.52, 0.86) : vec3(0.35, 0.78, 0.82);
+          acc += vc * trans;
+          trans = 0.0;
+          break;
+        }
+      }
       vec4 s = sampleField(p);
       float q = fieldOf(s);
       if (q < 1.0e-3) continue;
@@ -165,7 +201,7 @@ void main() {
       float light = exp(-tau);
       float rainFrac = (s.r + s.g > 1.0e-6) ? s.g / (s.r + s.g) : 0.0;
       vec3 albedo = (uFieldSel == 4)
-        ? radarColor(s.a)
+        ? dbzColor(s.a)
         : mix(CLOUD_BRIGHT, RAIN_TINT, rainFrac);
       vec3 col = (uFieldSel == 4)
         ? albedo * (0.55 + 0.45 * light)
@@ -193,6 +229,21 @@ void main() {
     if (i >= uSteps) break;
     float t = t0 + (float(i) + jitter) * dt;
     vec3 p = ro + rd * t;
+    if (uShowVortex > 0.5) {
+      float z = vortAt(p);
+      if (abs(z) >= uVortLevel) {
+        vec3 gz = vec3(
+          abs(vortAt(p + vec3(0.004,0,0))) - abs(vortAt(p - vec3(0.004,0,0))),
+          abs(vortAt(p + vec3(0,0.004,0))) - abs(vortAt(p - vec3(0,0.004,0))),
+          abs(vortAt(p + vec3(0,0,0.004))) - abs(vortAt(p - vec3(0,0,0.004)))
+        );
+        vec3 nv = normalize(-gz + vec3(1.0e-6));
+        float dv = max(dot(nv, uSun), 0.0);
+        vec3 base = z > 0.0 ? vec3(0.72, 0.46, 0.85) : vec3(0.30, 0.74, 0.80);
+        outColor = vec4(base * (0.35 + 0.75 * dv), 1.0);
+        return;
+      }
+    }
     float q = waterAt(p);
     if (q >= uThreshold) {
       // Refine the crossing by one linear step.
@@ -205,12 +256,20 @@ void main() {
       vec4 s = sampleField(p);
       float rainFrac = (s.r + s.g > 1.0e-6) ? s.g / (s.r + s.g) : 0.0;
       vec3 albedo = (uFieldSel == 4)
-        ? radarColor(s.a)
+        ? dbzColor(s.a)
         : mix(CLOUD_BRIGHT, RAIN_TINT, rainFrac);
-      vec3 col = albedo * (0.22 * SKY_AMBIENT * sky + 0.95 * diff) +
-                 CLOUD_SHADE * 0.25;
-      float rim = pow(1.0 - abs(dot(n, -rd)), 3.0);
-      col += SKY_AMBIENT * rim * 0.35;
+      vec3 col;
+      if (uCloudGrey > 0.5 && uFieldSel != 4) {
+        // Bare matte grey, lit from above: how a visualiser draws an
+        // iso-surface with no material of its own.
+        float v = 0.05 + 0.27 * sky + 0.72 * diff;
+        col = vec3(clamp(v, 0.0, 1.0));
+      } else {
+        col = albedo * (0.22 * SKY_AMBIENT * sky + 0.95 * diff) +
+              CLOUD_SHADE * 0.25;
+        float rim = pow(1.0 - abs(dot(n, -rd)), 3.0);
+        col += SKY_AMBIENT * rim * 0.35;
+      }
 
       if (uShowUpdraft > 0.5) {
         float wn = clamp(s.b / uWMax, -1.0, 1.0);
@@ -248,6 +307,11 @@ export interface VolumeUniforms {
   uGridCells: { value: THREE.Vector3 };
   uWMax: { value: number };
   uContourStep: { value: number };
+  uVort: { value: THREE.Data3DTexture | null };
+  uCloudGrey: { value: number };
+  uPalette: { value: number };
+  uShowVortex: { value: number };
+  uVortLevel: { value: number };
 }
 
 export function createVolumeMaterial(): THREE.ShaderMaterial {
@@ -264,6 +328,11 @@ export function createVolumeMaterial(): THREE.ShaderMaterial {
     uGridCells: { value: new THREE.Vector3(48, 48, 40) },
     uWMax: { value: 20 },
     uContourStep: { value: 0 },
+    uVort: { value: null },
+    uCloudGrey: { value: 0 },
+    uPalette: { value: 0 },
+    uShowVortex: { value: 0 },
+    uVortLevel: { value: 0.02 },
   };
   return new THREE.ShaderMaterial({
     uniforms: uniforms as unknown as Record<string, THREE.IUniform>,

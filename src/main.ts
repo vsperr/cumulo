@@ -82,11 +82,55 @@ const send = (m: ToWorker, transfer?: Transferable[]) =>
 let base: BaseStateMessage | null = null;
 let diag: Diagnostics | null = null;
 let msPerStep = 0;
+let maxVort = 0;
 let running = false;
 let lastFrameWall = performance.now();
 let renderFps = 0;
 
+/**
+ * The two visual styles. "cm1" reproduces how CM1 output is conventionally
+ * shown: a bare grey cloud iso-surface against a daylight sky, a reflectivity
+ * slice lying on the ground, and the mesocyclone picked out as a vorticity
+ * iso-surface.
+ */
+function applyLook(look: "cumulo" | "cm1"): void {
+  const r = cfg.render;
+  if (look === "cm1") {
+    r.mode = "surface";
+    r.field = "cloud";
+    r.threshold = 0.05;
+    r.smooth = true;
+    r.contourStep = 0;
+    r.cloudGrey = true;
+    r.sky = "day";
+    r.groundRadar = true;
+    r.groundLevel = 0;
+    r.palette = "cm1";
+    r.showVortex = true;
+    r.vortexLevel = 0.012;
+    r.sunElevation = 62;
+    r.showUpdraft = false;
+    r.showBox = false;
+    r.showGround = false;
+  } else {
+    r.mode = "surface";
+    r.field = "total";
+    r.threshold = 0.02;
+    r.smooth = false;
+    r.contourStep = 0.2;
+    r.cloudGrey = false;
+    r.sky = "dark";
+    r.groundRadar = false;
+    r.palette = "nws";
+    r.showVortex = false;
+    r.showUpdraft = true;
+    r.showBox = true;
+    r.showGround = true;
+  }
+}
+
 let panel: Panel;
+let lastLook: "cumulo" | "cm1" = "cumulo";
 
 /** Rebuild the control panel for the current config and UI mode. */
 function rebuildPanel(): void {
@@ -97,6 +141,17 @@ function rebuildPanel(): void {
     cfg,
     cfg.ui.expert ? SCHEMA : SCHEMA_BASIC,
     (rebuild) => {
+      if (cfg.render.look !== lastLook) {
+        lastLook = cfg.render.look;
+        applyLook(lastLook);
+        scope.setPalette(cfg.render.palette);
+        view.applyRenderConfig(cfg.render);
+        lastLook = cfg.render.look;
+rebuildPanel();
+        updateHud();
+        return;
+      }
+      scope.setPalette(cfg.render.palette);
       view.applyRenderConfig(cfg.render);
       if (rebuild) view.setGrid(cfg.grid, cfg.render.exaggerateZ);
       send({ type: "config", cfg, rebuild });
@@ -158,6 +213,7 @@ worker.onmessage = (ev: MessageEvent<FromWorker>) => {
   } else if (m.type === "frame") {
     diag = m.diag;
     msPerStep = m.msPerStep;
+    maxVort = m.maxVort;
     const data = new Uint16Array(m.buf);
     view.updateField(data, Math.max(Math.abs(m.diag.maxW), Math.abs(m.diag.minW)));
     send({ type: "recycle", buf: m.buf }, [m.buf]);
@@ -182,6 +238,9 @@ worker.onmessage = (ev: MessageEvent<FromWorker>) => {
     });
     $("rcaption").textContent = scope.caption();
     send({ type: "recycleRadar", buf: r.buf }, [r.buf]);
+
+    view.updateVorticity(new Uint16Array(m.vort));
+    send({ type: "recycleVort", buf: m.vort }, [m.vort]);
     updateHud();
     if (!m.diag.stable) {
       running = false;
@@ -461,6 +520,9 @@ function updateHud(): void {
       `updraft     ${diag.maxW.toFixed(0)} m/s   downdraft ${gust.toFixed(0)} m/s`,
       `cloud top   ${(diag.cloudTop / 1000).toFixed(1)} km`,
       `rain so far ${diag.maxRainAccum.toFixed(0)} mm`,
+      ...(cfg.render.showVortex
+        ? [`rotation    ${maxVort.toFixed(3)} 1/s (marking ${cfg.render.vortexLevel})`]
+        : []),
       `running at  ${(cfg.numerics.dt / (msPerStep / 1000)).toFixed(0)}x real time`,
     ].join("\n");
     if (!diag.stable)
@@ -477,6 +539,7 @@ function updateHud(): void {
     `cloud top ${fmt(diag.cloudTop / 1000, 2)} km`,
     `rain      ${fmt(diag.maxRainAccum, 2)} mm max`,
     `CFL adv   ${fmt(diag.cfl, 2)}     acoustic ${acCfl.toFixed(2)}`,
+    `vorticity ${maxVort.toFixed(4)} 1/s max   (iso at ${cfg.render.vortexLevel})`,
     `speed     ${msPerStep.toFixed(0)} ms/step · ${(
       cfg.numerics.dt / (msPerStep / 1000)
     ).toFixed(0)}x realtime · ${renderFps.toFixed(0)} fps`,

@@ -70,6 +70,45 @@ export function radarCss(dbz: number): string | null {
   return c ? `rgb(${c[0]},${c[1]},${c[2]})` : null;
 }
 
+/**
+ * The continuous rainbow CM1 output is conventionally plotted with in VisIt:
+ * dark blue through cyan, green, yellow, red to magenta. Unlike the banded
+ * operational table this one is a smooth ramp, which is what makes a CM1
+ * reflectivity figure recognisable at a glance.
+ */
+const CM1_STOPS: [number, [number, number, number]][] = [
+  [-10, [0, 0, 140]],
+  [0, [0, 115, 255]],
+  [10, [0, 230, 242]],
+  [20, [26, 217, 51]],
+  [30, [140, 242, 26]],
+  [40, [255, 242, 0]],
+  [50, [255, 115, 0]],
+  [60, [242, 0, 0]],
+  [70, [217, 0, 191]],
+  [80, [255, 191, 242]],
+];
+
+export function cm1Color(dbz: number): [number, number, number] {
+  if (dbz <= CM1_STOPS[0][0]) return CM1_STOPS[0][1];
+  for (let i = 1; i < CM1_STOPS.length; i++) {
+    const [d1, c1] = CM1_STOPS[i];
+    if (dbz <= d1) {
+      const [d0, c0] = CM1_STOPS[i - 1];
+      const t = (dbz - d0) / (d1 - d0);
+      return [
+        Math.round(c0[0] + t * (c1[0] - c0[0])),
+        Math.round(c0[1] + t * (c1[1] - c0[1])),
+        Math.round(c0[2] + t * (c1[2] - c0[2])),
+      ];
+    }
+  }
+  return CM1_STOPS[CM1_STOPS.length - 1][1];
+}
+
+/** Lowest value the CM1-style plots colour; below it the field reads as empty. */
+export const CM1_FLOOR = -10;
+
 /** Plain-language description of a reflectivity value. */
 export function describeDbz(dbz: number): string {
   if (dbz < 5) return "no echo";

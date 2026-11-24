@@ -1,4 +1,4 @@
-import { RADAR_SCALE, DBZ_FLOOR, describeDbz } from "../core/radar";
+import { RADAR_SCALE, DBZ_FLOOR, describeDbz, cm1Color } from "../core/radar";
 
 export type ScopeMode = "plan" | "section";
 
@@ -31,6 +31,8 @@ export class RadarScope {
   private g: CanvasRenderingContext2D;
   private frame: ScopeFrame | null = null;
   mode: ScopeMode = "plan";
+  /** Operational banded table, or the continuous rainbow CM1 is plotted with. */
+  palette: "nws" | "cm1" = "nws";
 
   constructor(private canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext("2d");
@@ -49,7 +51,18 @@ export class RadarScope {
     this.draw();
   }
 
+  setPalette(p: "nws" | "cm1"): void {
+    if (this.palette === p) return;
+    this.palette = p;
+    this.draw();
+  }
+
   private colorOf(dbz: number): string | null {
+    if (this.palette === "cm1") {
+      if (dbz < -10) return null;
+      const c = cm1Color(dbz);
+      return `rgb(${c[0]},${c[1]},${c[2]})`;
+    }
     if (dbz < DBZ_FLOOR) return null;
     let pick = RADAR_SCALE[0];
     for (const s of RADAR_SCALE) if (dbz >= s.dbz) pick = s;
@@ -225,10 +238,27 @@ export class RadarScope {
 
   private drawColorBar(x0: number, y0: number, w: number, h: number): void {
     const g = this.g;
-    const stops = RADAR_SCALE;
-    const bw = (w - 12) / stops.length;
     g.font = "8.5px ui-monospace, monospace";
     g.textAlign = "center";
+    if (this.palette === "cm1") {
+      // Continuous ramp from -10 to 80 dBZ.
+      const bw = w - 12;
+      for (let px = 0; px < bw; px++) {
+        const d = -10 + (px / bw) * 90;
+        const c = cm1Color(d);
+        g.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
+        g.fillRect(6 + px, y0, 1, h - 10);
+      }
+      g.fillStyle = "#7f8ea6";
+      for (const d of [-10, 10, 30, 50, 70]) {
+        const px = ((d + 10) / 90) * bw;
+        g.fillText(String(d), 6 + px, y0 + h - 1);
+      }
+      void x0;
+      return;
+    }
+    const stops = RADAR_SCALE;
+    const bw = (w - 12) / stops.length;
     for (let i = 0; i < stops.length; i++) {
       const s = stops[i];
       g.fillStyle = `rgb(${s.rgb[0]},${s.rgb[1]},${s.rgb[2]})`;

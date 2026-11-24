@@ -79,10 +79,36 @@ Because radar sees rain and not cloud, a growing tower is invisible on the
 scope until it starts making raindrops — watch the 3D view and the radar side
 by side and the delay is obvious. That is not a bug in either one.
 
+## The CM1 look
+
+The `style` control switches between the house look and **CM1 / VisIt**: the
+way published CM1 figures are drawn. A bare matte-grey iso-surface of cloud
+water with no material of its own, a daylight sky behind it, a reflectivity
+slice lying on the ground in the continuous rainbow colour table, and the
+mesocyclone picked out as an iso-surface of vertical vorticity.
+
+Two honest caveats about that last one:
+
+- **It marks the mesocyclone, not a tornado.** Peak vertical vorticity here is
+  around 0.03 s⁻¹, which is mesocyclone scale. A tornado is 1 s⁻¹ and upward
+  and needs grid spacing of order 100 m; at 600 m there is nothing to resolve.
+  The published figures with a narrow vortex reaching the ground come from runs
+  tens of times finer than anything a browser tab will do.
+- **It is usually inside the cloud, and therefore hidden**, because occlusion
+  is honest here: the nearer surface along each ray wins. The HUD prints the
+  current maximum vorticity next to the iso level so you can pick a level that
+  actually shows something.
+
+The anvil also looks wrong next to a real CM1 figure, and for a reason worth
+knowing: there is no ice in this model, so the anvil is liquid. Real anvils are
+ice, which is why they spread wider, live longer and light up on radar.
+
 ## Nothing is smoothed
 
-Interpolation between grid cells is **off by default**, in the 3D view and on
-the radar scope alike. Linear filtering invents values the solver never
+Interpolation between grid cells is **off by default** in the house look, in
+the 3D view and on the radar scope alike. (The CM1 style turns it back on: a
+smooth iso-surface is exactly what a visualiser draws, and the smoothing there
+is in the surface normals rather than a fog over the data.) Linear filtering invents values the solver never
 computed: it looks soft and pretty, and it quietly implies a resolution the
 model does not have. With it off you see the cells the solver actually
 advanced, with hard edges — a 48-cell domain looks like a 48-cell domain.

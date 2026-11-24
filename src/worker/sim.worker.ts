@@ -40,7 +40,8 @@ export type ToWorker =
   | { type: "reset" }
   | { type: "steps"; n: number }
   | { type: "recycle"; buf: ArrayBuffer }
-  | { type: "recycleRadar"; buf: ArrayBuffer };
+  | { type: "recycleRadar"; buf: ArrayBuffer }
+  | { type: "recycleVort"; buf: ArrayBuffer };
 
 /** Radar products, computed from the rain field at full precision. */
 export interface RadarFrame {
@@ -61,6 +62,9 @@ export type FromWorker =
   | {
       type: "frame";
       buf: ArrayBuffer;
+      /** Uint16 half floats: vertical vorticity [1/s], one per cell. */
+      vort: ArrayBuffer;
+      maxVort: number;
       radar: RadarFrame;
       diag: Diagnostics;
       msPerStep: number;
@@ -160,6 +164,48 @@ function packFrame(): { buf: ArrayBuffer; wMax: number } {
 }
 
 const radarSpare: ArrayBuffer[] = [];
+const vortSpare: ArrayBuffer[] = [];
+
+/**
+ * Vertical vorticity, zeta = dv/dx - du/dy, at cell centres. An iso-surface of
+ * it is how a supercell's mesocyclone and any tornado-like vortex are shown in
+ * the CM1 figures people publish: a narrow column standing under the updraft.
+ */
+function packVorticity(): { buf: ArrayBuffer; maxVort: number } {
+  const s = solver!;
+  const { nx, ny, nz, dx, dy } = s;
+  const n = nx * ny * nz;
+  let buf = vortSpare.pop();
+  if (!buf || buf.byteLength !== n * 2) buf = new ArrayBuffer(n * 2);
+  const out = new Uint16Array(buf);
+  const per = s.cfg.numerics.boundary === "periodic";
+  const wrap = (i: number, m: number) =>
+    per ? ((i % m) + m) % m : i < 0 ? 0 : i >= m ? m - 1 : i;
+  let maxVort = 1e-6;
+
+  for (let k = 0; k < nz; k++) {
+    const layer = nx * ny * k;
+    for (let j = 0; j < ny; j++) {
+      const jp = wrap(j + 1, ny);
+      const jm = wrap(j - 1, ny);
+      const jNext = wrap(j + 1, ny);
+      for (let i = 0; i < nx; i++) {
+        const ip = wrap(i + 1, nx);
+        const im = wrap(i - 1, nx);
+        // Face velocities averaged to cell centres, then centred differences.
+        const vAt = (ii: number) =>
+          0.5 * (s.v[ii + nx * j + layer] + s.v[ii + nx * jNext + layer]);
+        const uAt = (jj: number) =>
+          0.5 * (s.u[i + nx * jj + layer] + s.u[wrap(i + 1, nx) + nx * jj + layer]);
+        const zeta = (vAt(ip) - vAt(im)) / (2 * dx) - (uAt(jp) - uAt(jm)) / (2 * dy);
+        out[i + nx * j + layer] = toHalf(zeta);
+        const a = Math.abs(zeta);
+        if (a > maxVort) maxVort = a;
+      }
+    }
+  }
+  return { buf, maxVort };
+}
 
 /**
  * Build the radar products: column-maximum reflectivity (what a radar's
@@ -221,8 +267,12 @@ function emit(): void {
   if (!solver) return;
   const { buf } = packFrame();
   const radar = packRadar();
+  const v = packVorticity();
   const diag = solver.diagnostics();
-  post({ type: "frame", buf, radar, diag, msPerStep }, [buf, radar.buf]);
+  post(
+    { type: "frame", buf, vort: v.buf, maxVort: v.maxVort, radar, diag, msPerStep },
+    [buf, v.buf, radar.buf]
+  );
 }
 
 function tick(): void {
@@ -283,6 +333,9 @@ self.onmessage = (ev: MessageEvent<ToWorker>) => {
         break;
       case "recycleRadar":
         if (radarSpare.length < 3) radarSpare.push(m.buf);
+        break;
+      case "recycleVort":
+        if (vortSpare.length < 3) vortSpare.push(m.buf);
         break;
     }
   } catch (err) {
