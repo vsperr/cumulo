@@ -22,6 +22,11 @@ precision highp sampler3D;
 in vec3 vLocal;
 out vec4 outColor;
 
+// three.js declares these only in the vertex stage; the fragment stage needs
+// its own declarations, and the renderer fills them in by name.
+uniform mat4 projectionMatrix;
+uniform mat4 modelViewMatrix;
+
 uniform sampler3D uField;
 uniform sampler3D uVort;
 uniform vec3 uCamLocal;
@@ -138,6 +143,18 @@ bool boxHit(vec3 ro, vec3 rd, out float t0, out float t1) {
   return t1 > max(t0, 0.0);
 }
 
+/**
+ * Depth of a point along the ray, in window coordinates.
+ *
+ * Without this the fragment keeps the depth of the box's back face, which is
+ * behind everything inside the box — so the ground slice and the cloud sorted
+ * against each other by the wrong value and whichever drew second won.
+ */
+float depthAt(vec3 pLocal) {
+  vec4 clip = projectionMatrix * modelViewMatrix * vec4(pLocal, 1.0);
+  return (clip.z / clip.w) * 0.5 + 0.5;
+}
+
 vec3 gradient(vec3 p, float h) {
   return vec3(
     waterAt(p + vec3(h, 0.0, 0.0)) - waterAt(p - vec3(h, 0.0, 0.0)),
@@ -177,6 +194,7 @@ void main() {
     vec3 acc = vec3(0.0);
     float trans = 1.0;
     float sunStep = 1.6 / 6.0;
+    float firstT = -1.0;
     for (int i = 0; i < 512; i++) {
       if (i >= uSteps || trans < 0.004) break;
       float t = t0 + (float(i) + jitter) * dt;
@@ -187,12 +205,14 @@ void main() {
           vec3 vc = z > 0.0 ? vec3(0.76, 0.52, 0.86) : vec3(0.35, 0.78, 0.82);
           acc += vc * trans;
           trans = 0.0;
+          if (firstT < 0.0) firstT = t;
           break;
         }
       }
       vec4 s = sampleField(p);
       float q = fieldOf(s);
       if (q < 1.0e-3) continue;
+      if (firstT < 0.0) firstT = t;
 
       float sigma = q * uDensity * 3.0;
       float a = 1.0 - exp(-sigma * dt * 60.0);
@@ -219,6 +239,7 @@ void main() {
     }
     float alpha = 1.0 - trans;
     if (alpha < 0.004) discard;
+    gl_FragDepth = depthAt(ro + rd * max(firstT, t0));
     outColor = vec4(acc / max(alpha, 1.0e-4), alpha);
     return;
   }
@@ -240,6 +261,7 @@ void main() {
         vec3 nv = normalize(-gz + vec3(1.0e-6));
         float dv = max(dot(nv, uSun), 0.0);
         vec3 base = z > 0.0 ? vec3(0.72, 0.46, 0.85) : vec3(0.30, 0.74, 0.80);
+        gl_FragDepth = depthAt(p);
         outColor = vec4(base * (0.35 + 0.75 * dv), 1.0);
         return;
       }
@@ -285,6 +307,7 @@ void main() {
         float m = smoothstep(0.0, wline, line);
         col = mix(vec3(0.05, 0.07, 0.10), col * 0.55 + 0.18, m);
       }
+      gl_FragDepth = depthAt(p);
       outColor = vec4(col, 1.0);
       return;
     }

@@ -63,6 +63,9 @@ function createGroundRadar(): THREE.Mesh {
   const mat = new THREE.ShaderMaterial({
     glslVersion: THREE.GLSL3,
     depthWrite: true,
+    // Visible from underneath too: looking up at the storm is a normal thing
+    // to want, and a one-sided plane simply vanishes from below.
+    side: THREE.DoubleSide,
     uniforms: {
       uField: { value: null as THREE.Data3DTexture | null },
       uLevel: { value: 0.02 },
@@ -119,9 +122,7 @@ function createGroundRadar(): THREE.Mesh {
         outColor = vec4(uPalette > 0.5 ? cm1Color(d) : bandColor(d), 1.0);
       }`,
   });
-  const m = new THREE.Mesh(geo, mat);
-  m.renderOrder = -1;
-  return m;
+  return new THREE.Mesh(geo, mat);
 }
 
 export class SceneView {
