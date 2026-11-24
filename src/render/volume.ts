@@ -187,7 +187,12 @@ void main() {
   float steps = float(uSteps);
   float dt = span / steps;
 
-  float jitter = hash12(gl_FragCoord.xy);
+  // Jitter breaks up the rings a fixed sample spacing paints in the volume
+  // render. An iso-surface wants the opposite: with a thin, nearly uniform
+  // layer sitting right on the threshold, neighbouring pixels sampling at
+  // different offsets disagree about whether they crossed it at all, and the
+  // surface dissolves into speckle. Surfaces sample deterministically.
+  float jitter = (uMode == 0) ? hash12(gl_FragCoord.xy) : 0.5;
 
   if (uMode == 0) {
     // --- volumetric absorption + single scattering ---
@@ -258,7 +263,8 @@ void main() {
           abs(vortAt(p + vec3(0,0.004,0))) - abs(vortAt(p - vec3(0,0.004,0))),
           abs(vortAt(p + vec3(0,0,0.004))) - abs(vortAt(p - vec3(0,0,0.004)))
         );
-        vec3 nv = normalize(-gz + vec3(1.0e-6));
+        float gzlen = length(gz);
+        vec3 nv = gzlen > 1.0e-6 ? -gz / gzlen : -rd;
         float dv = max(dot(nv, uSun), 0.0);
         vec3 base = z > 0.0 ? vec3(0.72, 0.46, 0.85) : vec3(0.30, 0.74, 0.80);
         gl_FragDepth = depthAt(p);
@@ -272,7 +278,12 @@ void main() {
       float frac = (uThreshold - prev) / max(q - prev, 1.0e-6);
       p = ro + rd * (t - dt * (1.0 - clamp(frac, 0.0, 1.0)));
 
-      vec3 n = normalize(-gradient(p, 1.0 / 128.0) + vec3(1.0e-6));
+      // Where the field is flat the gradient is numerical noise, and
+      // normalising it gives every pixel a different random normal. Face the
+      // viewer instead: a featureless sheet should look like one.
+      vec3 grad = -gradient(p, 1.0 / 128.0);
+      float glen = length(grad);
+      vec3 n = glen > 1.0e-3 * max(uThreshold, 1.0e-3) ? grad / glen : -rd;
       float diff = max(dot(n, uSun), 0.0);
       float sky = 0.5 + 0.5 * n.y;
       vec4 s = sampleField(p);
